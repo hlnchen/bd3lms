@@ -1,5 +1,5 @@
 --extra-index-url https://download.pytorch.org/whl/nightly/cu126
-
+--find-links https://storage.googleapis.com/libtpu-releases/index.html
 # torch==2.7.0.dev20250308+cu126
 # torchvision==0.22.0.dev20250308+cu126
 # torchaudio==2.6.0.dev20250308+cu126
