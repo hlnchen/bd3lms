@@ -61,9 +61,9 @@ optim:
 
 trainer:
   _target_: lightning.Trainer
-  accelerator: cuda
-  num_nodes: 1
-  devices: ${device_count:}
+  accelerator: tpu
+  num_nodes: 2
+  devices: "auto"
   accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:${trainer.devices} * ${loader.batch_size} * ${trainer.num_nodes}}}
   gradient_clip_val: 1.0
   precision: 'bf16'

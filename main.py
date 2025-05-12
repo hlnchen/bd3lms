@@ -12,6 +12,13 @@ import dataloader
 import diffusion
 import utils
 
+from lightning.fabric import Fabric
+from lightning.fabric.strategies import (
+    XLAFSDPStrategy,
+)  # Can also use string "xla_fsdp"
+from models.autoregressive import AR
+from models.dit import DIT
+
 omegaconf.OmegaConf.register_new_resolver("cwd", os.getcwd)
 omegaconf.OmegaConf.register_new_resolver("device_count", torch.cuda.device_count)
 omegaconf.OmegaConf.register_new_resolver("eval", eval)
@@ -139,7 +146,7 @@ def _ppl_eval(config, logger, tokenizer):
     trainer.validate(model, valid_ds)
 
 
-def _train(fabric, config, logger, tokenizer):
+def _train(fabric: Fabric, config, logger, tokenizer):
     logger.info("Starting Training.")
     wandb_logger = None
     if config.get("wandb", None) is not None:
@@ -163,7 +170,9 @@ def _train(fabric, config, logger, tokenizer):
         for _, callback in config.callbacks.items():
             callbacks.append(hydra.utils.instantiate(callback))
 
+    # TODO: setup dataloader with fabric
     train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
+    train_ds, valid_ds = fabric.setup_dataloaders(train_ds, valid_ds)
     _print_batch(train_ds, valid_ds, tokenizer)
 
     if config.training.from_pretrained is not None and ckpt_path is None:
@@ -171,18 +180,20 @@ def _train(fabric, config, logger, tokenizer):
         # load pretraining checkpoint
         if "kuleshov-group/" in config.training.from_pretrained:
             # load from hf
-            model = diffusion.Diffusion(config, tokenizer=tokenizer)
+            with fabric.init_module(empty_init=True):
+                model = diffusion.Diffusion(config, tokenizer=tokenizer)
             state_dict = transformers.AutoModelForMaskedLM.from_pretrained(
                 config.training.from_pretrained, trust_remote_code=True
             ).state_dict()
             model.load_state_dict(state_dict)
         else:
-            model = diffusion.Diffusion.load_from_checkpoint(
-                config.training.from_pretrained,
-                tokenizer=tokenizer,
-                config=config,
-                strict=False,
-            )
+            with fabric.init_module(empty_init=False):
+                model = diffusion.Diffusion.load_from_checkpoint(
+                    config.training.from_pretrained,
+                    tokenizer=tokenizer,
+                    config=config,
+                    strict=False,
+                )
         # add buffers for grid search
         model.register_buffer(
             "sampling_eps_min", torch.tensor(config.training.sampling_eps_min)
@@ -192,12 +203,20 @@ def _train(fabric, config, logger, tokenizer):
         )
     else:
         logger.info(f"Initializing new model")
-        model = diffusion.Diffusion(config, tokenizer=valid_ds.tokenizer)
+        with fabric.init_module(empty_init=True):
+            model = diffusion.Diffusion(config, tokenizer=valid_ds.tokenizer)
+    model = fabric.setup_module(model)
+
+    # NOTE: this trainer calls lightning.Trainer, need to specify accelerator="tpu" and related config
     trainer = hydra.utils.instantiate(
         config.trainer,
         default_root_dir=os.getcwd(),
         callbacks=callbacks,
-        strategy=hydra.utils.instantiate(config.strategy),
+        strategy=(
+            fabric.strategy
+            if fabric.accelerator == "tpu"
+            else hydra.utils.instantiate(config.strategy)
+        ),
         logger=wandb_logger,
     )
 
@@ -205,7 +224,7 @@ def _train(fabric, config, logger, tokenizer):
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(fabric, config):
+def main(fabric: Fabric, config):
     """Main entry point for training."""
     L.seed_everything(config.seed)
     _print_config(config, resolve=True, save_cfg=True)
@@ -224,13 +243,6 @@ def main(fabric, config):
 
 
 if __name__ == "__main__":
-    from lightning.fabric import Fabric
-    from lightning.fabric.strategies import (
-        XLAFSDPStrategy,
-    )  # Can also use string "xla_fsdp"
-    from models.autoregressive import AR
-    from models.dit import DIT
-
     # Ensure necessary environment variables like PJRT_DEVICE=TPU are set
     # Configuration (these would typically come from args or a config file)
     NUM_TPU_CORES_PER_HOST = "auto"  # Standard for most TPU VMs
