@@ -32,8 +32,7 @@ from pathlib import Path
 import datasets
 import torch
 from datasets import load_dataset
-from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
-                              TensorDataset)
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from tqdm.auto import tqdm
 
 import transformers
@@ -65,13 +64,18 @@ from termcolor import colored
 
 
 logger = logging.getLogger(__name__)
-require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt")
+require_version(
+    "datasets>=1.8.0",
+    "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt",
+)
 MODEL_CONFIG_CLASSES = list(MODEL_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Finetune a transformers model on a Masked Language Modeling task")
+    parser = argparse.ArgumentParser(
+        description="Finetune a transformers model on a Masked Language Modeling task"
+    )
     # Han: many arguments below will not be used, but keeping for future edits
     parser.add_argument(
         "--dataset_name",
@@ -92,10 +96,16 @@ def parse_args():
         help="The name of the additional dataset to use (via the datasets library). For example, BookCorpus.",
     )
     parser.add_argument(
-        "--train_file", type=str, default=None, help="A csv or a json file containing the training data."
+        "--train_file",
+        type=str,
+        default=None,
+        help="A csv or a json file containing the training data.",
     )
     parser.add_argument(
-        "--validation_file", type=str, default=None, help="A csv or a json file containing the validation data."
+        "--validation_file",
+        type=str,
+        default=None,
+        help="A csv or a json file containing the validation data.",
     )
     parser.add_argument(
         "--validation_split_percentage",
@@ -159,8 +169,15 @@ def parse_args():
         default=5e-5,
         help="Initial learning rate (after the potential warmup period) to use.",
     )
-    parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
-    parser.add_argument("--num_train_epochs", type=int, default=3, help="Total number of training epochs to perform.")
+    parser.add_argument(
+        "--weight_decay", type=float, default=0.0, help="Weight decay to use."
+    )
+    parser.add_argument(
+        "--num_train_epochs",
+        type=int,
+        default=3,
+        help="Total number of training epochs to perform.",
+    )
     parser.add_argument(
         "--max_train_steps",
         type=int,
@@ -178,13 +195,27 @@ def parse_args():
         type=SchedulerType,
         default="linear",
         help="The scheduler type to use.",
-        choices=["linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"],
+        choices=[
+            "linear",
+            "cosine",
+            "cosine_with_restarts",
+            "polynomial",
+            "constant",
+            "constant_with_warmup",
+        ],
     )
     parser.add_argument(
-        "--num_warmup_steps", type=int, default=0, help="Number of steps for the warmup in the lr scheduler."
+        "--num_warmup_steps",
+        type=int,
+        default=0,
+        help="Number of steps for the warmup in the lr scheduler.",
     )
-    parser.add_argument("--output_dir", type=str, default=None, help="Where to store the final model.")
-    parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
+    parser.add_argument(
+        "--output_dir", type=str, default=None, help="Where to store the final model."
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="A seed for reproducible training."
+    )
     parser.add_argument(
         "--model_type",
         type=str,
@@ -211,30 +242,69 @@ def parse_args():
         help="The number of processes to use for the preprocessing.",
     )
     parser.add_argument(
-        "--overwrite_cache", type=bool, default=False, help="Overwrite the cached training and evaluation sets"
+        "--overwrite_cache",
+        type=bool,
+        default=False,
+        help="Overwrite the cached training and evaluation sets",
     )
     parser.add_argument(
-        "--mlm_probability", type=float, default=0.0, help="Ratio of tokens to mask for masked language modeling loss"
-    )
-    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
-    parser.add_argument(
-        "--hub_model_id", type=str, help="The name of the repository to keep in sync with the local `output_dir`."
-    )
-    parser.add_argument("--hub_token", type=str, help="The token to use to push to the Model Hub.")
-    parser.add_argument("--no_save_grads", action="store_true", help="Whether to save gradients to a file.")
-    parser.add_argument(
-        "--query_file", type=str, default=None, help="A pickle file containing gradient information from the querying data."
+        "--mlm_probability",
+        type=float,
+        default=0.0,
+        help="Ratio of tokens to mask for masked language modeling loss",
     )
     parser.add_argument(
-        "--query_data_cap", type=int, default=None, help="Max number of data for which we will save gradients.",
-    )
-    parser.add_argument("--influence_metric", type=str, default=None, help="Metric for computing the gradients.")
-    parser.add_argument("--init_blank_language_model", action="store_true", help="Whether or not to use a completely blank LM.")
-    parser.add_argument(
-        "--tokenized_data_file_path", type=str, default=None, help="Path of the tokenized data file."
+        "--push_to_hub",
+        action="store_true",
+        help="Whether or not to push the model to the Hub.",
     )
     parser.add_argument(
-        "--if_create_tokenized_data_file", type=str, default=None, help="Whether to create a new tokenized data file (yes or no)."
+        "--hub_model_id",
+        type=str,
+        help="The name of the repository to keep in sync with the local `output_dir`.",
+    )
+    parser.add_argument(
+        "--hub_token", type=str, help="The token to use to push to the Model Hub."
+    )
+    parser.add_argument(
+        "--no_save_grads",
+        action="store_true",
+        help="Whether to save gradients to a file.",
+    )
+    parser.add_argument(
+        "--query_file",
+        type=str,
+        default=None,
+        help="A pickle file containing gradient information from the querying data.",
+    )
+    parser.add_argument(
+        "--query_data_cap",
+        type=int,
+        default=None,
+        help="Max number of data for which we will save gradients.",
+    )
+    parser.add_argument(
+        "--influence_metric",
+        type=str,
+        default=None,
+        help="Metric for computing the gradients.",
+    )
+    parser.add_argument(
+        "--init_blank_language_model",
+        action="store_true",
+        help="Whether or not to use a completely blank LM.",
+    )
+    parser.add_argument(
+        "--tokenized_data_file_path",
+        type=str,
+        default=None,
+        help="Path of the tokenized data file.",
+    )
+    parser.add_argument(
+        "--if_create_tokenized_data_file",
+        type=str,
+        default=None,
+        help="Whether to create a new tokenized data file (yes or no).",
     )
     parser.add_argument(
         "--load_trained_score_based_model",
@@ -247,28 +317,52 @@ def parse_args():
         help="",
     )
     parser.add_argument(
-        "--sigma_start_value", type=float, default=-1, help="",
+        "--sigma_start_value",
+        type=float,
+        default=-1,
+        help="",
     )
     parser.add_argument(
-        "--sigma_end_value", type=float, default=-1, help="",
+        "--sigma_end_value",
+        type=float,
+        default=-1,
+        help="",
     )
     parser.add_argument(
-        "--sigma_num_steps", type=int, default=1000, help="",
+        "--sigma_num_steps",
+        type=int,
+        default=1000,
+        help="",
     )
     parser.add_argument(
-        "--loss_mode", type=str, default="", help="",
+        "--loss_mode",
+        type=str,
+        default="",
+        help="",
     )
     parser.add_argument(
-        "--remove_noise_mode", type=str, default="", help="",
+        "--remove_noise_mode",
+        type=str,
+        default="",
+        help="",
     )
     parser.add_argument(
-        "--hardcoded_pseudo_diralpha", type=float, default=3, help="",
+        "--hardcoded_pseudo_diralpha",
+        type=float,
+        default=3,
+        help="",
     )
     parser.add_argument(
-        "--context_size", type=int, default=0, help="",
+        "--context_size",
+        type=int,
+        default=0,
+        help="",
     )
     parser.add_argument(
-        "--decoding_block_size", type=int, default=25, help="",
+        "--decoding_block_size",
+        type=int,
+        default=25,
+        help="",
     )
     args = parser.parse_args()
 
@@ -290,7 +384,9 @@ def main():
 
     # Setup logging, we only want one process per machine to log things on the screen.
     # accelerator.is_local_main_process is only True for one process per machine.
-    logger.setLevel(logging.INFO if accelerator.is_local_main_process else logging.ERROR)
+    logger.setLevel(
+        logging.INFO if accelerator.is_local_main_process else logging.ERROR
+    )
     if accelerator.is_local_main_process:
         datasets.utils.logging.set_verbosity_warning()
         transformers.utils.logging.set_verbosity_info()
@@ -323,11 +419,17 @@ def main():
         config = CONFIG_MAPPING[args.model_type]()
         logger.warning("You are instantiating a new config instance from scratch.")
 
-    assert args.use_slow_tokenizer == True # Han: for a compatible tokenizer with the prompt tuning model
+    assert (
+        args.use_slow_tokenizer == True
+    )  # Han: for a compatible tokenizer with the prompt tuning model
     if args.tokenizer_name:
-        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name, use_fast=not args.use_slow_tokenizer)
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.tokenizer_name, use_fast=not args.use_slow_tokenizer
+        )
     elif args.model_name_or_path:
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, use_fast=not args.use_slow_tokenizer)
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name_or_path, use_fast=not args.use_slow_tokenizer
+        )
     else:
         raise ValueError(
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
@@ -346,7 +448,9 @@ def main():
     jump = False
     if args.tokenized_data_file_path and args.if_create_tokenized_data_file:
         if args.if_create_tokenized_data_file == "no":
-            raise ValueError("cannot load existing dataset file in the data processing file")
+            raise ValueError(
+                "cannot load existing dataset file in the data processing file"
+            )
             tokenized_datasets = load_from_disk(args.tokenized_data_file_path)
             jump = True
         elif args.if_create_tokenized_data_file == "yes":
@@ -370,9 +474,14 @@ def main():
                 split=f"train[:{args.raw_data_percentage}%]",
             )
         if args.additional_dataset_name and args.additional_dataset_name != "none":
-            add_dataset = load_dataset(args.additional_dataset_name, split=f"train[:{args.raw_data_percentage}%]")
+            add_dataset = load_dataset(
+                args.additional_dataset_name,
+                split=f"train[:{args.raw_data_percentage}%]",
+            )
             raw_datasets["train"] = raw_datasets["train"].remove_columns("title")
-            raw_datasets["train"] = concatenate_datasets([raw_datasets["train"], add_dataset])
+            raw_datasets["train"] = concatenate_datasets(
+                [raw_datasets["train"], add_dataset]
+            )
 
         # Preprocessing the datasets.
         # First we tokenize all the texts.
@@ -402,7 +511,9 @@ def main():
             def tokenize_function(examples):
                 # Remove empty lines
                 examples[text_column_name] = [
-                    line for line in examples[text_column_name] if len(line) > 0 and not line.isspace()
+                    line
+                    for line in examples[text_column_name]
+                    if len(line) > 0 and not line.isspace()
                 ]
                 return tokenizer(
                     examples[text_column_name],
@@ -428,7 +539,9 @@ def main():
             # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
             # efficient when it receives the `special_tokens_mask`.
             def tokenize_function(examples):
-                return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
+                return tokenizer(
+                    examples[text_column_name], return_special_tokens_mask=True
+                )
 
             with accelerator.main_process_first():
                 tokenized_datasets = raw_datasets.map(
@@ -444,7 +557,9 @@ def main():
             # max_seq_length.
             def group_texts(examples):
                 # Concatenate all texts.
-                concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+                concatenated_examples = {
+                    k: sum(examples[k], []) for k in examples.keys()
+                }
                 total_length = len(concatenated_examples[list(examples.keys())[0]])
                 # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
                 # customize this part to your needs.
@@ -452,7 +567,10 @@ def main():
                     total_length = (total_length // max_seq_length) * max_seq_length
                 # Split by chunks of max_len.
                 result = {
-                    k: [t[i : i + max_seq_length] for i in range(0, total_length, max_seq_length)]
+                    k: [
+                        t[i : i + max_seq_length]
+                        for i in range(0, total_length, max_seq_length)
+                    ]
                     for k, t in concatenated_examples.items()
                 }
                 return result
