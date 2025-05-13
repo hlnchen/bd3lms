@@ -181,8 +181,8 @@ def _train(fabric: Fabric, config, logger, tokenizer):
             callbacks.append(hydra.utils.instantiate(callback))
 
     # TODO: setup dataloader with fabric, and do checkpoint loading
+    # TODO: consider using datamodule
     train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
-    train_ds, valid_ds = fabric.setup_dataloaders(train_ds, valid_ds)
     _print_batch(train_ds, valid_ds, tokenizer)
 
     if config.training.from_pretrained is not None and ckpt_path is None:
@@ -190,20 +190,18 @@ def _train(fabric: Fabric, config, logger, tokenizer):
         # load pretraining checkpoint
         if "kuleshov-group/" in config.training.from_pretrained:
             # load from hf
-            with fabric.init_module(empty_init=True):
-                model = diffusion.Diffusion(config, tokenizer=tokenizer)
+            model = diffusion.Diffusion(config, tokenizer=tokenizer)
             state_dict = transformers.AutoModelForMaskedLM.from_pretrained(
                 config.training.from_pretrained, trust_remote_code=True
             ).state_dict()
             model.load_state_dict(state_dict)
         else:
-            with fabric.init_module(empty_init=False):
-                model = diffusion.Diffusion.load_from_checkpoint(
-                    config.training.from_pretrained,
-                    tokenizer=tokenizer,
-                    config=config,
-                    strict=False,
-                )
+            model = diffusion.Diffusion.load_from_checkpoint(
+                config.training.from_pretrained,
+                tokenizer=tokenizer,
+                config=config,
+                strict=False,
+            )
         # add buffers for grid search
         model.register_buffer(
             "sampling_eps_min", torch.tensor(config.training.sampling_eps_min)
@@ -213,45 +211,35 @@ def _train(fabric: Fabric, config, logger, tokenizer):
         )
     else:
         logger.info(f"Initializing new model")
-        with fabric.init_module(empty_init=True):
-            model = diffusion.Diffusion(config, tokenizer=valid_ds.tokenizer)
-    model = fabric.setup_module(model)
+        model = diffusion.Diffusion(config, tokenizer=valid_ds.tokenizer)
 
     # NOTE: this trainer calls lightning.Trainer, need to specify accelerator="tpu" and related config
-    trainer = hydra.utils.instantiate(
-        config.trainer,
-        default_root_dir=os.getcwd(),
-        callbacks=callbacks,
-        strategy=(
-            fabric.strategy
-            if fabric.accelerator == "tpu"
-            else hydra.utils.instantiate(config.strategy)
-        ),
-        logger=wandb_logger,
-    )
-
-    trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
-
-
-@hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(config):
-    """Main entry point for training."""
-    NUM_TPU_CORES_PER_HOST = "auto"  # Standard for most TPU VMs
-    NUM_HOSTS = 2  # Example: training on 2 hosts
     strategy_params = {
         "auto_wrap_policy": {diffusion.Diffusion},
         # "activation_checkpointing_policy": activation_checkpointing_policy_config,
         "state_dict_type": "sharded",  # Crucial for multi-host TPU
         "sequential_save": False,  # Set to True to reduce host RAM during checkpointing
     }
-
-    fabric = Fabric(
-        accelerator="tpu",
-        devices=NUM_TPU_CORES_PER_HOST,  # Number of TPU cores per host
-        num_nodes=NUM_HOSTS,  # Number of hosts/nodes
-        strategy=XLAFSDPStrategy(**strategy_params),
-        precision="32-true",  # NOTE: ValueError: `precision='bf16-mixed')` is not supported in XLA. `precision` must be one of: ('32-true', '16-true', 'bf16-true').
+    strategy = XLAFSDPStrategy(**strategy_params)
+    trainer = hydra.utils.instantiate(
+        config.trainer,
+        default_root_dir=os.getcwd(),
+        callbacks=callbacks,
+        strategy=(
+            strategy
+            if fabric.accelerator == "tpu"
+            else hydra.utils.instantiate(config.strategy)
+        ),
+        logger=wandb_logger,
     )
+
+    # TODO: consider using datamodule
+    trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
+
+
+@hydra.main(version_base=None, config_path="configs", config_name="config")
+def main(config):
+    """Main entry point for training."""
 
     L.seed_everything(config.seed)
     _print_config(config, resolve=True, save_cfg=True)
@@ -266,7 +254,7 @@ def main(config):
         config.wandb = None
         _ppl_eval(config, logger, tokenizer)
     else:
-        fabric.launch(_train, config, logger, tokenizer)
+        _train(config, logger, tokenizer)
 
 
 if __name__ == "__main__":
