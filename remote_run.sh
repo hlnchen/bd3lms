@@ -29,11 +29,11 @@ gcloud alpha compute tpus tpu-vm ssh $TPU_VM_NAME \
     --project=salesforce-research-internal \
     --tunnel-through-iap \
     --worker=all \
-    --command='git clone https://github.com/hlnchen/bd3lms.git \
-    cd bd3lms; \
-    python -m venv venv; \
+    --command='cd bd3lms; \
+    git pull; \
     source venv/bin/activate; \
-    pip install -r requirements.txt; \'
+    pip install -r requirements.txt; \
+    bash scripts/train/train_tpu_debug.sh'
     # --command='cd fabric_test; \
     # export PJRT_DEVICE=TPU; \
     # source venv/bin/activate; \

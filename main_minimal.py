@@ -24,8 +24,6 @@ from lightning.fabric import Fabric
 from lightning.fabric.strategies import (
     XLAFSDPStrategy,
 )  # Can also use string "xla_fsdp"
-from models.autoregressive import AR
-from models.dit import DIT
 
 omegaconf.OmegaConf.register_new_resolver("cwd", os.getcwd)
 omegaconf.OmegaConf.register_new_resolver("device_count", torch.cuda.device_count)
