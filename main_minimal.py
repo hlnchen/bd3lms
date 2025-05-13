@@ -20,7 +20,6 @@ import dataloader
 import diffusion
 import utils
 
-from lightning.fabric import Fabric
 from lightning.fabric.strategies import (
     XLAFSDPStrategy,
 )  # Can also use string "xla_fsdp"
@@ -153,7 +152,7 @@ def _ppl_eval(config, logger, tokenizer):
     trainer.validate(model, valid_ds)
 
 
-def _train(fabric: Fabric, config, logger, tokenizer):
+def _train(config, logger, tokenizer):
     logger.info("Starting Training.")
     wandb_logger = None
     if config.get("wandb", None) is not None:
@@ -225,7 +224,7 @@ def _train(fabric: Fabric, config, logger, tokenizer):
         callbacks=callbacks,
         strategy=(
             strategy
-            if fabric.accelerator == "tpu"
+            if config.trainer.accelerator == "tpu"
             else hydra.utils.instantiate(config.strategy)
         ),
         logger=wandb_logger,
