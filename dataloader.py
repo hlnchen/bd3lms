@@ -575,7 +575,7 @@ def get_tokenizer(config):
 def get_dataloaders(
     config, tokenizer, skip_train=False, skip_valid=False, valid_seed=None
 ):
-    num_devices = config.trainer.num_devices
+    num_devices = config.trainer.devices
     if config.trainer.accumulate_grad_batches > 1:
         assert config.loader.global_batch_size == (
             config.loader.batch_size
