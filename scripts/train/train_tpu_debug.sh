@@ -14,9 +14,10 @@
 #SBATCH --requeue                     # Requeue upon preemption
 
 BLOCK_SIZE=16
-PRETRAIN_CKPT=kuleshov-group/bd3lm-owt-block_size1024-pretrain # to train from scratch, set to null
+# PRETRAIN_CKPT=kuleshov-group/bd3lm-owt-block_size1024-pretrain # to train from scratch, set to null
+PRETRAIN_CKPT=""
 
-python -u main.py \
+python -u main_minimal.py \
     loader.global_batch_size=512 \
     loader.eval_global_batch_size=512 \
     loader.batch_size=16 \
@@ -34,4 +35,6 @@ python -u main.py \
     mode=train \
     model.attn_backend=flex \
     training.resample=True \
-    training.from_pretrained=$PRETRAIN_CKPT
+    training.from_pretrained=$PRETRAIN_CKPT \
+    trainer.max_steps=100 \
+    trainer.log_every_n_steps=10
