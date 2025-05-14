@@ -31,7 +31,7 @@ python -u main_minimal.py \
     data.insert_valid_eos=False \
     model.length=1024 \
     block_size=${BLOCK_SIZE} \
-    wandb.name=bd3lm-owt-block_size${BLOCK_SIZE} \
+    wandb.name=bd3lm-owt-block_size${BLOCK_SIZE}-$(date +%Y%m%d_%H%M%S) \
     mode=train \
     model.attn_backend=sdpa \
     strategy=xla \
