@@ -360,7 +360,7 @@ class Diffusion(L.LightningModule):
     def forward(self, x, sigma, sample_mode=False, store_kv=False):
         """Returns log score."""
         sigma = self._process_sigma(sigma)
-        with torch.amp.autocast("cuda", dtype=torch.float32):
+        with torch.autocast("xla", dtype=torch.float32):
             if self.config.algo.name == "bd3lm":
                 logits = self.backbone(
                     x, sigma, store_kv=store_kv, sample_mode=sample_mode
@@ -670,7 +670,7 @@ class Diffusion(L.LightningModule):
         if self.config.sampling.kv_cache:
             self.backbone.reset_kv_cache()
 
-        with torch.amp.autocast("cuda", dtype=torch.float32):
+        with torch.autocast("xla", dtype=torch.float32):
             # precompute token buffer
             num_pred_tokens = self.num_tokens - 1
             x = torch.zeros(

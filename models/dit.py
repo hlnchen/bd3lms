@@ -169,7 +169,7 @@ def rotate_half(x):
 
 
 def split_and_apply_rotary_pos_emb(qkv, rotary_cos_sin):
-    with torch.amp.autocast("cuda", enabled=False):
+    with torch.autocast("xla", enabled=False):
         cos, sin = rotary_cos_sin
         cos = cos.to(qkv.dtype)
         sin = sin.to(qkv.dtype)
@@ -218,7 +218,7 @@ class LayerNorm(nn.Module):
         self.dim = dim
 
     def forward(self, x):
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.autocast("xla", enabled=False):
             x = F.layer_norm(x.float(), [self.dim])
         return x * self.weight[None, None, :]
 
@@ -362,7 +362,7 @@ class DDiTBlockCausal(nn.Module):
         qkv = einops.rearrange(
             qkv, "b s (three h d) -> b s three h d", three=3, h=self.n_heads
         )
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.autocast("xla", enabled=False):
             cos, sin = rotary_cos_sin
             if self.attn_backend == "flash_attn":
                 qkv = apply_rotary_pos_emb(qkv, cos.to(qkv.dtype), sin.to(qkv.dtype))
@@ -556,7 +556,7 @@ class DDiTBlock(nn.Module):
         qkv = einops.rearrange(
             qkv, "b s (three h d) -> b s three h d", three=3, h=self.n_heads
         )
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.autocast("xla", enabled=False):
             cos, sin = rotary_cos_sin
             if self.attn_backend == "flash_attn":
                 qkv = apply_rotary_pos_emb(qkv, cos.to(qkv.dtype), sin.to(qkv.dtype))
@@ -831,7 +831,7 @@ class DIT(nn.Module, huggingface_hub.PyTorchModelHubMixin):
                 self.config.loader.eval_batch_size,
                 self.max_seqlen,
                 self.config.model.hidden_size * 3,
-                device="cuda",
+                device="xla",
                 dtype=torch.bfloat16,
             )
             block.cache_idx = 0
@@ -871,7 +871,7 @@ class DIT(nn.Module, huggingface_hub.PyTorchModelHubMixin):
             rotary_cos_sin = self.rotary_emb(x)
             mask = None
 
-        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        with torch.autocast("xla", dtype=torch.bfloat16):
             for i in range(len(self.blocks)):
                 x = self.blocks[i](
                     x,
