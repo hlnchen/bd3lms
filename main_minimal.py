@@ -222,11 +222,7 @@ def _train(config, logger, tokenizer):
         config.trainer,
         default_root_dir=os.getcwd(),
         callbacks=callbacks,
-        strategy=(
-            strategy
-            if config.trainer.accelerator == "tpu"
-            else hydra.utils.instantiate(config.strategy) # TODO: consolidate this into config.strategy
-        ),
+        strategy=hydra.utils.instantiate(config.strategy), # TODO: consolidate this into config.strategy
         logger=wandb_logger,
     )
 
