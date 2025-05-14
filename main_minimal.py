@@ -16,6 +16,11 @@ import rich.syntax
 import rich.tree
 import torch
 import transformers
+import logging
+
+# configure logging at the root level of Lightning
+logging.getLogger("lightning.pytorch").setLevel(logging.DEBUG)
+
 
 import dataloader
 import diffusion
