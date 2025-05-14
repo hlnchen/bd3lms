@@ -5,6 +5,7 @@ TODO:
 - adapt generate_samples and _ppl_eval to fabric
 - adapt train to fabric
 - change the config of configs/callbacks/ if necessary
+- data/checkpoints saving/loading to/from GCS
 """
 import os
 import fsspec
@@ -208,16 +209,16 @@ def _train(config, logger, tokenizer):
         )
     else:
         logger.info(f"Initializing new model")
-        model = diffusion.Diffusion(config, tokenizer=valid_ds.tokenizer)
+        model = diffusion.Diffusion(config, tokenizer=tokenizer)
 
     # NOTE: this trainer calls lightning.Trainer, need to specify accelerator="tpu" and related config
-    strategy_params = {
-        "auto_wrap_policy": {diffusion.Diffusion},
-        # "activation_checkpointing_policy": activation_checkpointing_policy_config,
-        "state_dict_type": "sharded",  # Crucial for multi-host TPU
-        "sequential_save": False,  # Set to True to reduce host RAM during checkpointing
-    }
-    strategy = XLAFSDPStrategy(**strategy_params)
+    # strategy_params = {
+    #     "auto_wrap_policy": {diffusion.Diffusion},
+    #     # "activation_checkpointing_policy": activation_checkpointing_policy_config,
+    #     "state_dict_type": "sharded",  # Crucial for multi-host TPU
+    #     "sequential_save": False,  # Set to True to reduce host RAM during checkpointing
+    # }
+    # strategy = XLAFSDPStrategy(**strategy_params)
     trainer = hydra.utils.instantiate(
         config.trainer,
         default_root_dir=os.getcwd(),

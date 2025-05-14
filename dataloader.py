@@ -661,9 +661,11 @@ def get_dataloaders(
             num_workers=config.loader.num_workers,
             pin_memory=config.loader.pin_memory,
             shuffle=not config.data.streaming,
-            persistent_workers=True,
+            persistent_workers=False,
         )
-        train_loader.tokenizer = tokenizer
+        # NOTE: remove for now because potential unpickling issues
+        # train_loader.tokenizer = tokenizer
+
     if skip_valid:
         valid_loader = None
     else:
@@ -681,8 +683,9 @@ def get_dataloaders(
             shuffle=shuffle_valid,
             generator=generator,
         )
+        # NOTE: remove for now because potential unpickling issues
         # Will be used in generative perplexity calculation
-        valid_loader.tokenizer = tokenizer
+        # valid_loader.tokenizer = tokenizer
 
     return train_loader, valid_loader
 
