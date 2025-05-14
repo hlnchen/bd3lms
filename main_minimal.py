@@ -161,6 +161,91 @@ def _ppl_eval(config, logger, tokenizer):
     trainer.validate(model, data_module)
 
 
+# Define train_function at the top level for pickling in distributed training
+def train_function(fabric, config, logger, tokenizer):
+    # Configure the training setup
+    wandb_logger = None
+    if config.get("wandb", None) is not None and fabric.global_rank == 0:
+        wandb_logger = L.pytorch.loggers.WandbLogger(
+            config=omegaconf.OmegaConf.to_object(config), **config.wandb
+        )
+
+    if (
+        config.checkpointing.resume_from_ckpt
+        and config.checkpointing.resume_ckpt_path is not None
+        and utils.fsspec_exists(config.checkpointing.resume_ckpt_path)
+    ):
+        ckpt_path = config.checkpointing.resume_ckpt_path
+        logger.info(f"Resuming training at {ckpt_path}")
+    else:
+        ckpt_path = None
+
+    # Lightning callbacks
+    callbacks = []
+    if "callbacks" in config:
+        for _, callback in config.callbacks.items():
+            callbacks.append(hydra.utils.instantiate(callback))
+
+    # Get dataloaders - prepare data happens inside this call
+    train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
+
+    # Make sure all ranks have finished preparing data before proceeding
+    fabric.barrier("data_preparation_complete")
+
+    if fabric.global_rank == 0:
+        _print_batch(train_ds, valid_ds, tokenizer)
+
+    # Setup dataloaders with fabric
+    train_ds = fabric.setup_dataloaders(train_ds)
+    valid_ds = fabric.setup_dataloaders(valid_ds)
+
+    # Initialize or load model
+    if config.training.from_pretrained is not None and ckpt_path is None:
+        logger.info(
+            f"Loading pretrained model from {config.training.from_pretrained}"
+        )
+        # load pretraining checkpoint
+        if "kuleshov-group/" in config.training.from_pretrained:
+            # load from hf
+            model = diffusion.Diffusion(config, tokenizer=tokenizer)
+            state_dict = transformers.AutoModelForMaskedLM.from_pretrained(
+                config.training.from_pretrained, trust_remote_code=True
+            ).state_dict()
+            model.load_state_dict(state_dict)
+        else:
+            model = diffusion.Diffusion.load_from_checkpoint(
+                config.training.from_pretrained,
+                tokenizer=tokenizer,
+                config=config,
+                strict=False,
+            )
+        # add buffers for grid search
+        model.register_buffer(
+            "sampling_eps_min", torch.tensor(config.training.sampling_eps_min)
+        )
+        model.register_buffer(
+            "sampling_eps_max", torch.tensor(config.training.sampling_eps_max)
+        )
+    else:
+        logger.info(f"Initializing new model")
+        model = diffusion.Diffusion(config, tokenizer=tokenizer)
+
+    # Setup model with fabric
+    model = fabric.setup_module(model)
+
+    # Create trainer using fabric's strategy
+    trainer = hydra.utils.instantiate(
+        config.trainer,
+        default_root_dir=os.getcwd(),
+        callbacks=callbacks,
+        strategy=fabric.strategy,
+        logger=wandb_logger,
+    )
+
+    # Train with the model and dataloaders set up by fabric
+    trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
+
+
 def _train(config, logger, tokenizer):
     logger.info("Starting Training.")
 
@@ -174,92 +259,8 @@ def _train(config, logger, tokenizer):
         precision=config.trainer.precision,
     )
 
-    # Define the training function that will be launched in a distributed manner
-    def train_function(fabric):
-        # Configure the training setup
-        wandb_logger = None
-        if config.get("wandb", None) is not None and fabric.global_rank == 0:
-            wandb_logger = L.pytorch.loggers.WandbLogger(
-                config=omegaconf.OmegaConf.to_object(config), **config.wandb
-            )
-
-        if (
-            config.checkpointing.resume_from_ckpt
-            and config.checkpointing.resume_ckpt_path is not None
-            and utils.fsspec_exists(config.checkpointing.resume_ckpt_path)
-        ):
-            ckpt_path = config.checkpointing.resume_ckpt_path
-            logger.info(f"Resuming training at {ckpt_path}")
-        else:
-            ckpt_path = None
-
-        # Lightning callbacks
-        callbacks = []
-        if "callbacks" in config:
-            for _, callback in config.callbacks.items():
-                callbacks.append(hydra.utils.instantiate(callback))
-
-        # Get dataloaders - prepare data happens inside this call
-        train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
-
-        # Make sure all ranks have finished preparing data before proceeding
-        fabric.barrier("data_preparation_complete")
-
-        if fabric.global_rank == 0:
-            _print_batch(train_ds, valid_ds, tokenizer)
-
-        # Setup dataloaders with fabric
-        train_ds = fabric.setup_dataloaders(train_ds)
-        valid_ds = fabric.setup_dataloaders(valid_ds)
-
-        # Initialize or load model
-        if config.training.from_pretrained is not None and ckpt_path is None:
-            logger.info(
-                f"Loading pretrained model from {config.training.from_pretrained}"
-            )
-            # load pretraining checkpoint
-            if "kuleshov-group/" in config.training.from_pretrained:
-                # load from hf
-                model = diffusion.Diffusion(config, tokenizer=tokenizer)
-                state_dict = transformers.AutoModelForMaskedLM.from_pretrained(
-                    config.training.from_pretrained, trust_remote_code=True
-                ).state_dict()
-                model.load_state_dict(state_dict)
-            else:
-                model = diffusion.Diffusion.load_from_checkpoint(
-                    config.training.from_pretrained,
-                    tokenizer=tokenizer,
-                    config=config,
-                    strict=False,
-                )
-            # add buffers for grid search
-            model.register_buffer(
-                "sampling_eps_min", torch.tensor(config.training.sampling_eps_min)
-            )
-            model.register_buffer(
-                "sampling_eps_max", torch.tensor(config.training.sampling_eps_max)
-            )
-        else:
-            logger.info(f"Initializing new model")
-            model = diffusion.Diffusion(config, tokenizer=tokenizer)
-
-        # Setup model with fabric
-        model = fabric.setup_module(model)
-
-        # Create trainer using fabric's strategy
-        trainer = hydra.utils.instantiate(
-            config.trainer,
-            default_root_dir=os.getcwd(),
-            callbacks=callbacks,
-            strategy=fabric.strategy,
-            logger=wandb_logger,
-        )
-
-        # Train with the model and dataloaders set up by fabric
-        trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
-
-    # Launch the training function in a distributed environment
-    fabric.launch(train_function)
+    # Launch the training function in a distributed environment with explicit arguments
+    fabric.launch(train_function, args=(config, logger, tokenizer))
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
