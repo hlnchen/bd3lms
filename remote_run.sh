@@ -34,7 +34,4 @@ gcloud alpha compute tpus tpu-vm ssh $TPU_VM_NAME \
     git pull; \
     source venv/bin/activate; \
     bash scripts/train/train_tpu_debug.sh'
-    # --command='cd fabric_test; \
-    # export PJRT_DEVICE=TPU; \
-    # source venv/bin/activate; \
-    # python fabric_test.py'
+
