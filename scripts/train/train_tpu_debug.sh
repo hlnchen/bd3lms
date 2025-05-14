@@ -25,7 +25,7 @@ python -u main_minimal.py \
     model=small \
     algo=bd3lm \
     algo.clip_search_widths=[0.5,0.6,0.7,0.8,0.9] \
-    data=openwebtext-split \
+    data=openwebtext-split-streaming \
     data.insert_train_special=False \
     data.insert_valid_special=False \
     data.insert_valid_eos=False \
