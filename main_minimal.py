@@ -225,7 +225,7 @@ def _train(config, logger, tokenizer):
         strategy=(
             strategy
             if config.trainer.accelerator == "tpu"
-            else hydra.utils.instantiate(config.strategy)
+            else hydra.utils.instantiate(config.strategy) # TODO: consolidate this into config.strategy
         ),
         logger=wandb_logger,
     )

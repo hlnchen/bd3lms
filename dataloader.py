@@ -366,7 +366,7 @@ def get_dataset(
     elif dataset_name == "openwebtext-train":
         dataset = datasets.load_dataset(
             "openwebtext",
-            split="train[:-100000]",
+            split="train[:10000]",
             cache_dir=cache_dir,
             revision=revision,
             streaming=False,
@@ -375,7 +375,7 @@ def get_dataset(
     elif dataset_name == "openwebtext-valid":
         dataset = datasets.load_dataset(
             "openwebtext",
-            split="train[-100000:]",
+            split="train[-10000:]",
             cache_dir=cache_dir,
             revision=revision,
             streaming=False,
