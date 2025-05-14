@@ -32,5 +32,5 @@ gcloud alpha compute tpus tpu-vm ssh $TPU_VM_NAME \
     --command='cd bd3lms; \
     git pull; \
     source venv/bin/activate; \
-    bash scripts/train/train_tpu_debug.sh'
+    bash scripts/train/train_tpu_debug.sh > logs/train_tpu_debug.log 2>&1'
 
