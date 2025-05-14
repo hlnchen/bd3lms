@@ -152,10 +152,12 @@ def _ppl_eval(config, logger, tokenizer):
     )
     L.seed_everything(seed)
     config.seed = seed
-    _, valid_ds = dataloader.get_dataloaders(
-        config, tokenizer, skip_train=True, valid_seed=seed
-    )
-    trainer.validate(model, valid_ds)
+    
+    # Initialize and setup the DataModule for validation
+    data_module = dataloader.TextDataModule(config, tokenizer, valid_seed=seed)
+    data_module.setup(stage='validate')
+    
+    trainer.validate(model, data_module)
 
 
 def _train(config, logger, tokenizer):
@@ -183,10 +185,12 @@ def _train(config, logger, tokenizer):
         for _, callback in config.callbacks.items():
             callbacks.append(hydra.utils.instantiate(callback))
 
-    # TODO: setup dataloader with fabric, and do checkpoint loading
-    # TODO: consider using datamodule
-    train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
-    _print_batch(train_ds, valid_ds, tokenizer)
+    # Using DataModule for data loading
+    data_module = dataloader.TextDataModule(config, tokenizer)
+    data_module.setup(stage='fit')
+    
+    # Print sample batches from both train and validation dataloaders
+    _print_batch(data_module.train_dataloader(), data_module.val_dataloader(), tokenizer)
 
     if config.training.from_pretrained is not None and ckpt_path is None:
         logger.info(f"Loading pretrained model from {config.training.from_pretrained}")
@@ -232,8 +236,8 @@ def _train(config, logger, tokenizer):
         logger=wandb_logger,
     )
 
-    # TODO: consider using datamodule
-    trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
+    # Train with DataModule
+    trainer.fit(model, datamodule=data_module, ckpt_path=ckpt_path)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")

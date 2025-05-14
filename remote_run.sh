@@ -30,7 +30,6 @@ gcloud alpha compute tpus tpu-vm ssh $TPU_VM_NAME \
     --tunnel-through-iap \
     --worker=all \
     --command='cd bd3lms; \
-    git checkout haolin/dev; \
     git pull; \
     source venv/bin/activate; \
     bash scripts/train/train_tpu_debug.sh'

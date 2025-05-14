@@ -16,6 +16,7 @@ import requests
 import tokenizers
 import torch
 import transformers
+import lightning as L
 
 import utils
 
@@ -792,3 +793,34 @@ class FaultTolerantDistributedSampler(torch.utils.data.DistributedSampler):
             yield index
 
         self.counter = 0
+
+
+class TextDataModule(L.LightningDataModule):
+    def __init__(self, config, tokenizer, valid_seed=None):
+        super().__init__()
+        self.config = config
+        self.tokenizer = tokenizer
+        self.valid_seed = valid_seed
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
+
+    def setup(self, stage=None):
+        if stage == 'fit' or stage is None:
+            self.train_dataset, self.val_dataset = get_dataloaders(
+                self.config, self.tokenizer, skip_train=False, skip_valid=False, valid_seed=self.valid_seed
+            )
+        
+        if stage == 'validate' or stage is None:
+            _, self.val_dataset = get_dataloaders(
+                self.config, self.tokenizer, skip_train=True, skip_valid=False, valid_seed=self.valid_seed
+            )
+
+    def train_dataloader(self):
+        return self.train_dataset
+
+    def val_dataloader(self):
+        return self.val_dataset
+
+    def test_dataloader(self):
+        return self.val_dataset  # Using validation dataset as test
