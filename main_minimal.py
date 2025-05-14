@@ -260,7 +260,7 @@ def _train(config, logger, tokenizer):
     )
 
     # Launch the training function in a distributed environment with explicit arguments
-    fabric.launch(train_function, args=(config, logger, tokenizer))
+    fabric.launch(train_function, config, logger, tokenizer)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
