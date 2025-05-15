@@ -61,10 +61,11 @@ optim:
 
 trainer:
   _target_: lightning.Trainer
-  accelerator: tpu
-  num_nodes: 2
-  devices: 4
-  accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:${trainer.devices} * ${loader.batch_size} * ${trainer.num_nodes}}}
+  # accelerator: tpu
+  # num_nodes: 2
+  # devices: 4
+  # accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:${trainer.devices} * ${loader.batch_size} * ${trainer.num_nodes}}}
+  accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:8 * ${loader.batch_size}}}
   gradient_clip_val: 1.0
   precision: 'bf16-true'
   num_sanity_val_steps: 2

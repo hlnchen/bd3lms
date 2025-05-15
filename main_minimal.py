@@ -261,19 +261,19 @@ def train_function(fabric: L.Fabric, config, logger, tokenizer):
     #     fabric=fabric,  # Pass the fabric instance to the trainer
     #     default_root_dir=os.getcwd(),
     # )
-    if isinstance(fabric.strategy, fabric_strategies.XLAStrategy):
-        from lightning.pytorch.strategies import StrategyRegistry
-        StrategyRegistry.register("xla_fabric", fabric_strategies.XLAStrategy)
-        strategy = "xla_fabric"
-    else:
-        strategy = fabric.strategy
+    # if isinstance(fabric.strategy, fabric_strategies.XLAStrategy):
+    #     from lightning.pytorch.strategies import StrategyRegistry
+    #     StrategyRegistry.register("xla_fabric", fabric_strategies.XLAStrategy)
+    #     strategy = "xla_fabric"
+    # else:
+    #     strategy = fabric.strategy
     trainer = hydra.utils.instantiate(
         config.trainer,
         default_root_dir=os.getcwd(),
         callbacks=config.callbacks,
-        strategy=strategy,
         logger=fabric.loggers,
     )
+    trainer = fabric.to_device(trainer)
     # Train with the model and dataloaders set up by fabric
     trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
 
