@@ -148,8 +148,13 @@ class FabricTrainer:
         # NOTE: exprimental, not sure if this is correct
         self.model = model
         model.trainer = self
-
-        optimizer, scheduler_cfg = model.configure_optimizers()
+        print(f"type(model): {type(model)}")
+        print(f"backbone params: {next(model.backbone.parameters())}")
+        print(f"noise params: {next(model.noise.parameters())}")
+        print(f"params: {next(model._get_parameters())}")
+        optimizer, scheduler_cfg = self._parse_optimizers_schedulers(
+            model.configure_optimizers()
+        )
         assert optimizer is not None
         optimizer = self.fabric.setup_optimizers(optimizer)
 
