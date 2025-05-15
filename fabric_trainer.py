@@ -140,11 +140,6 @@ class FabricTrainer:
         if val_loader is not None:
             val_loader = self.fabric.setup_dataloaders(val_loader)
 
-        # setup model and optimizer
-        if isinstance(self.fabric.strategy, L.fabric.strategies.fsdp.FSDPStrategy):
-            # currently, there is no way to support fsdp with model.configure_optimizers in fabric
-            # as it would require fabric to hold a reference to the model, which we don't want to.
-            raise NotImplementedError("BYOT currently does not support FSDP")
 
         if isinstance(self.fabric.strategy, L.fabric.strategies.XLAFSDPStrategy):
             # TODO: need to debug XLAFSDPStrategy as optimizers can't get params
@@ -184,7 +179,7 @@ class FabricTrainer:
         if self.num_sanity_val_steps > 0 and val_loader is not None:
             self._run_sanity_check(model, val_loader)
 
-        self.fabric.call("on_train_start", trainer=self, pl_module=model)
+        # self.fabric.call("on_train_start", trainer=self, pl_module=model)
 
         while not self.should_stop:
             self.train_loop(
@@ -238,14 +233,14 @@ class FabricTrainer:
                 for supported values.
 
         """
-        self.fabric.call("on_train_epoch_start", trainer=self, pl_module=model)
+        # self.fabric.call("on_train_epoch_start", trainer=self, pl_module=model)
 
         for batch_idx, batch in enumerate(train_loader):
             # end epoch if stopping training completely or max batches for this epoch reached
             if self.should_stop or batch_idx >= limit_batches:
                 break
 
-            self.fabric.call("on_train_batch_start", trainer=self, pl_module=model, batch=batch, batch_idx=batch_idx)
+            # self.fabric.call("on_train_batch_start", trainer=self, pl_module=model, batch=batch, batch_idx=batch_idx)
 
             # check if optimizer should step in gradient accumulation
             should_optim_step = self.global_step % self.grad_accum_steps == 0
@@ -287,14 +282,14 @@ class FabricTrainer:
                 # gradient accumulation -> no optimizer step
                 self.training_step(model=model, batch=batch, batch_idx=batch_idx)
 
-            self.fabric.call(
-                "on_train_batch_end",
-                trainer=self,
-                pl_module=model,
-                batch=batch,
-                batch_idx=batch_idx,
-                outputs=self._current_train_return,
-            )
+            # self.fabric.call(
+            #     "on_train_batch_end",
+            #     trainer=self,
+            #     pl_module=model,
+            #     batch=batch,
+            #     batch_idx=batch_idx,
+            #     outputs=self._current_train_return,
+            # )
 
             # this guard ensures, we only step the scheduler once per global step
             if should_optim_step:
@@ -321,7 +316,7 @@ class FabricTrainer:
                 self.should_stop = True
                 break
 
-        self.fabric.call("on_train_epoch_end", trainer=self, pl_module=model)
+        # self.fabric.call("on_train_epoch_end", trainer=self, pl_module=model)
 
     def val_loop(
         self,
@@ -352,14 +347,10 @@ class FabricTrainer:
             )
             return
 
-        if not is_overridden("on_validation_model_eval", _unwrap_objects(model)):
-            model.eval()
-        else:
-            self.fabric.call("on_validation_model_eval")  # calls `model.eval()`
-
+        model.eval()
         torch.set_grad_enabled(False)
 
-        self.fabric.call("on_validation_epoch_start")
+        # self.fabric.call("on_validation_epoch_start")
 
         val_metrics = {}
         for batch_idx, batch in enumerate(val_loader):
@@ -367,13 +358,13 @@ class FabricTrainer:
             if self.should_stop or batch_idx >= limit_batches:
                 break
 
-            self.fabric.call("on_validation_batch_start", batch, batch_idx)
+            # self.fabric.call("on_validation_batch_start", batch, batch_idx)
 
             out = model.validation_step(batch, batch_idx)
             # avoid gradients in stored/accumulated values -> prevents potential OOM
             out = apply_to_collection(out, torch.Tensor, lambda x: x.detach())
 
-            self.fabric.call("on_validation_batch_end", out, batch, batch_idx)
+            # self.fabric.call("on_validation_batch_end", out, batch, batch_idx)
             self._current_val_return = out
 
             # Accumulate metrics for logging
@@ -393,12 +384,9 @@ class FabricTrainer:
                 val_metrics[k] /= min(len(val_loader), limit_batches)
             self.fabric.log_dict(val_metrics, step=self.global_step)
 
-        self.fabric.call("on_validation_epoch_end")
+        # self.fabric.call("on_validation_epoch_end")
 
-        if not is_overridden("on_validation_model_train", _unwrap_objects(model)):
-            model.train()
-        else:
-            self.fabric.call("on_validation_model_train")
+        model.train()
         torch.set_grad_enabled(True)
 
     def training_step(
@@ -418,10 +406,10 @@ class FabricTrainer:
         )
 
         loss = outputs if isinstance(outputs, torch.Tensor) else outputs["loss"]
-
-        self.fabric.call("on_before_backward", loss)
         self.fabric.backward(loss)
-        self.fabric.call("on_after_backward")
+
+        # self.fabric.call("on_before_backward", loss)
+        # self.fabric.call("on_after_backward")
 
         # avoid gradients in stored/accumulated values -> prevents potential OOM
         self._current_train_return = apply_to_collection(
@@ -652,7 +640,7 @@ class FabricTrainer:
         if not is_overridden("validation_step", _unwrap_objects(model)):
             return
 
-        self.fabric.call("on_validation_model_eval")
+        # self.fabric.call("on_validation_model_eval")
 
         torch.set_grad_enabled(False)
 
@@ -669,14 +657,14 @@ class FabricTrainer:
             if batch_idx >= limit and self.num_sanity_val_steps != -1:
                 break
 
-            self.fabric.call("on_validation_batch_start", batch, batch_idx)
+            # self.fabric.call("on_validation_batch_start", batch, batch_idx)
 
             out = model.validation_step(batch, batch_idx)
             out = apply_to_collection(out, torch.Tensor, lambda x: x.detach())
 
-            self.fabric.call("on_validation_batch_end", out, batch, batch_idx)
+            # self.fabric.call("on_validation_batch_end", out, batch, batch_idx)
 
-        self.fabric.call("on_validation_model_train")
+        # self.fabric.call("on_validation_model_train")
         torch.set_grad_enabled(True)
 
         if self.fabric.is_global_zero:

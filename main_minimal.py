@@ -32,7 +32,7 @@ import diffusion
 import utils
 import lightning.pytorch.strategies as pytorch_strategies
 import lightning.fabric.strategies as fabric_strategies
-
+import fabric_trainer
 omegaconf.OmegaConf.register_new_resolver("cwd", os.getcwd)
 omegaconf.OmegaConf.register_new_resolver("device_count", torch.cuda.device_count)
 omegaconf.OmegaConf.register_new_resolver("eval", eval)
@@ -256,24 +256,24 @@ def train_function(fabric: L.Fabric, config, logger, tokenizer):
     # model = fabric.setup_module(model)
 
     # Create trainer using fabric
-    # trainer: fabric_trainer.FabricTrainer = hydra.utils.instantiate(
-    #     config.trainer,
-    #     fabric=fabric,  # Pass the fabric instance to the trainer
-    #     default_root_dir=os.getcwd(),
-    # )
+    trainer: fabric_trainer.FabricTrainer = hydra.utils.instantiate(
+        config.trainer,
+        fabric=fabric,  # Pass the fabric instance to the trainer
+        default_root_dir=os.getcwd(),
+    )
     # if isinstance(fabric.strategy, fabric_strategies.XLAStrategy):
     #     from lightning.pytorch.strategies import StrategyRegistry
     #     StrategyRegistry.register("xla_fabric", fabric_strategies.XLAStrategy)
     #     strategy = "xla_fabric"
     # else:
     #     strategy = fabric.strategy
-    trainer = hydra.utils.instantiate(
-        config.trainer,
-        default_root_dir=os.getcwd(),
-        callbacks=config.callbacks,
-        logger=fabric.loggers,
-    )
-    trainer = fabric.to_device(trainer)
+    # trainer = hydra.utils.instantiate(
+    #     config.trainer,
+    #     default_root_dir=os.getcwd(),
+    #     callbacks=config.callbacks,
+    #     logger=fabric.loggers,
+    # )
+    # trainer = fabric.to_device(trainer)
     # Train with the model and dataloaders set up by fabric
     trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
 
