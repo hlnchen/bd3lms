@@ -262,12 +262,9 @@ def train_function(fabric: L.Fabric, config, logger, tokenizer):
     #     default_root_dir=os.getcwd(),
     # )
     if isinstance(fabric.strategy, fabric_strategies.XLAStrategy):
-        strategy = pytorch_strategies.XLAStrategy(
-            accelerator=fabric.accelerator,
-            parallel_devices=fabric._connector._parallel_devices or None,
-            precision_plugin=fabric._connector.precision or None,
-            checkpoint_io=fabric._connector.checkpoint_io or None,
-        )
+        # from lightning.pytorch.strategies import StrategyRegistry
+        # STRATEGY_REGISTRY.register("xla")
+        strategy = "xla"
     else:
         strategy = fabric.strategy
     trainer = hydra.utils.instantiate(
