@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - /callbacks: [checkpoint_every_n_steps, checkpoint_monitor]
+  - /callbacks: [checkpoint_every_n_steps, checkpoint_monitor, learning_rate_monitor]
   - /data: openwebtext-streaming
   - /model: small
   - /strategy: ddp
