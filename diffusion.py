@@ -255,7 +255,7 @@ class Diffusion(L.LightningModule):
         ]
         if "sampler" not in checkpoint.keys():
             checkpoint["sampler"] = {}
-        if hasattr(self.trainer.train_dataloader.sampler, "state_dict"):
+        if hasattr(self.trainer.train_dataloader, "sampler") and hasattr(self.trainer.train_dataloader.sampler, "state_dict"):
             sampler_state_dict = self.trainer.train_dataloader.sampler.state_dict()
             checkpoint["sampler"]["random_state"] = sampler_state_dict.get(
                 "random_state", None
@@ -284,7 +284,7 @@ class Diffusion(L.LightningModule):
             sampler_cls = dataloader.RandomFaultTolerantSampler
         updated_dls = []
         for dl in dataloaders:
-            if hasattr(dl.sampler, "shuffle"):
+            if hasattr(dl, "sampler") and hasattr(dl.sampler, "shuffle"):
                 dl_sampler = sampler_cls(
                     dl.dataset,
                     shuffle=dl.sampler.shuffle,
