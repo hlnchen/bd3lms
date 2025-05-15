@@ -42,6 +42,7 @@ class FabricTrainer:
         gradient_clip_algorithm: Optional[str] = None,
         num_sanity_val_steps: int = 2,
         val_check_interval: Union[int, float] = 1.0,
+        default_root_dir: Optional[str] = None,
     ) -> None:
         """Exemplary Trainer with Fabric. This is a very simple trainer focused on readablity but with reduced
         featureset. As a trainer with more included features, we recommend using the
@@ -90,7 +91,6 @@ class FabricTrainer:
 
             max_epochs: The maximum number of epochs to train
             max_steps: The maximum number of (optimizer) steps to train
-            grad_accum_steps: How many batches to process before each optimizer step
             limit_train_batches: Limits the number of train batches per epoch
                 If greater than number of batches in the dataloader, this has no effect.
             limit_val_batches: Limits the number of validation batches per epoch.
@@ -118,11 +118,19 @@ class FabricTrainer:
                 after a fraction of the training epoch. Pass an ``int`` to check after a fixed number of training
                 batches.
                 Default: ``1.0``.
+            default_root_dir: Default path for logs and weights when no logger/checkpoint_dir passed.
+                Default: ``os.getcwd()``.
 
         Warning:
             callbacks written for the lightning trainer (especially making assumptions on the trainer), won't work!
 
         """
+        # Set default_root_dir if not provided
+        self.default_root_dir = default_root_dir or os.getcwd()
+
+        # Use default_root_dir for checkpoint_dir if not specified
+        if checkpoint_dir == "./checkpoints" and default_root_dir is not None:
+            checkpoint_dir = os.path.join(self.default_root_dir, "checkpoints")
 
         self.fabric = L.Fabric(
             accelerator=accelerator,
