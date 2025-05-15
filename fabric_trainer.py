@@ -10,6 +10,7 @@ from tqdm import tqdm
 import lightning as L
 from lightning.fabric.wrappers import _unwrap_objects
 from lightning.pytorch.utilities.model_helpers import is_overridden
+from lightning.pytorch.utilities.types import LRSchedulerConfig
 
 from diffusion import Diffusion
 
@@ -157,9 +158,7 @@ class FabricTrainer:
             optimizers, scheduler_cfgs = model.configure_optimizers()
             optimizer, scheduler_cfg = optimizers[0], scheduler_cfgs[0]
             model, optimizer = self.fabric.setup(model, optimizer)
-        self.lr_scheduler_configs = scheduler_cfg
-        print("lr_scheduler_configs", self.lr_scheduler_configs, type(self.lr_scheduler_configs))
-        print("scheduler", self.lr_scheduler_configs.scheduler, type(self.lr_scheduler_configs.scheduler))
+        self.lr_scheduler_configs = LRSchedulerConfig(**scheduler_cfg)
         # NOTE: exprimental, not sure if this is correct
         self.model = model
         model.trainer = self
