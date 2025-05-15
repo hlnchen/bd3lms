@@ -234,7 +234,7 @@ class FabricTrainer:
                 for supported values.
 
         """
-        self.fabric.call("on_train_epoch_start")
+        self.fabric.call("on_train_epoch_start", trainer=self, pl_module=model)
 
         for batch_idx, batch in enumerate(train_loader):
             # end epoch if stopping training completely or max batches for this epoch reached
