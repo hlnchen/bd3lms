@@ -34,7 +34,7 @@ python -u main_minimal.py \
     wandb.name=bd3lm-owt-block_size${BLOCK_SIZE}-$(date +%Y%m%d_%H%M%S) \
     mode=train \
     model.attn_backend=sdpa \
-    strategy=xla \
+    strategy=xla-fsdp \
     training.resample=True \
     training.from_pretrained=$PRETRAIN_CKPT \
     trainer._target_='fabric_trainer.FabricTrainer' \

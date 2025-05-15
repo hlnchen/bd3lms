@@ -23,13 +23,13 @@ class FabricTrainer:
         accelerator: Union[str, Accelerator] = "auto",
         strategy: Union[str, Strategy] = "auto",
         devices: Union[list[int], str, int] = "auto",
+        num_nodes: int = 1,
         precision: Union[str, int] = "32-true",
         plugins: Optional[Union[str, Any]] = None,
         callbacks: Optional[Union[list[Any], Any]] = None,
         loggers: Optional[Union[Logger, list[Logger]]] = None,
         max_epochs: Optional[int] = 1000,
         max_steps: Optional[int] = None,
-        grad_accum_steps: int = 1,
         limit_train_batches: Union[int, float] = float("inf"),
         limit_val_batches: Union[int, float] = float("inf"),
         validation_frequency: int = 1,
@@ -55,6 +55,8 @@ class FabricTrainer:
             devices: Number of devices to train on (``int``),
                 which GPUs to train on (``list`` or ``str``), or ``"auto"``.
                 The value applies per node.
+            num_nodes: Number of compute nodes for distributed training.
+                Default: ``1``.
             precision: Double precision (``"64"``), full precision (``"32"``), half precision AMP (``"16-mixed"``),
                 or bfloat16 precision AMP (``"bf16-mixed"``).
             plugins: One or several custom plugins
@@ -126,6 +128,7 @@ class FabricTrainer:
             accelerator=accelerator,
             strategy=strategy,
             devices=devices,
+            num_nodes=num_nodes,
             precision=precision,
             plugins=plugins,
             callbacks=callbacks,
