@@ -158,9 +158,10 @@ class FabricTrainer:
             optimizers, scheduler_cfgs = model.configure_optimizers()
             optimizer, scheduler_cfg = optimizers[0], scheduler_cfgs[0]
             model, optimizer = self.fabric.setup(model, optimizer)
-        self.lr_scheduler_configs = [LRSchedulerConfig(**scheduler_cfg)]
         # NOTE: exprimental, not sure if this is correct
         self.model = model
+        self.lr_scheduler_configs = [LRSchedulerConfig(**scheduler_cfg)]
+        self.optimizers = [optimizer]
         model.trainer = self
 
         # assemble state (current epoch and global step will be added in save)
