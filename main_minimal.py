@@ -259,7 +259,7 @@ def train_function(fabric: L.Fabric, config, logger, tokenizer):
         fabric=fabric,  # Pass the fabric instance to the trainer
         default_root_dir=os.getcwd(),
     )
-    fabric.call("on_train_start", trainer=trainer)
+    fabric.call("on_train_start", trainer=trainer, pl_module=model)
     # Train with the model and dataloaders set up by fabric
     trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
 
