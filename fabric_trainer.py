@@ -149,9 +149,7 @@ class FabricTrainer:
         self.model = model
         model.trainer = self
 
-        optimizer, scheduler_cfg = self._parse_optimizers_schedulers(
-            model.configure_optimizers()
-        )
+        optimizer, scheduler_cfg = model.configure_optimizers()
         assert optimizer is not None
         optimizer = self.fabric.setup_optimizers(optimizer)
 
