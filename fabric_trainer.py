@@ -618,7 +618,7 @@ class FabricTrainer:
             ):
                 # single optimizer in list
                 if len(configure_optim_output) == 1:
-                    return configure_optim_output[0][0], None
+                    return configure_optim_output[0], None
 
                 raise NotImplementedError("BYOT only supports a single optimizer")
 
