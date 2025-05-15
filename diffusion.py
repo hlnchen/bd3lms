@@ -264,6 +264,8 @@ class Diffusion(L.LightningModule):
             checkpoint["sampler"]["random_state"] = None
 
     # NOTE: let fabric handle distributed samplers
+    def on_train_start(self, *args, **kwargs):
+        pass
     # def on_train_start(self, dataloaders=None):
     #     if self.ema:
     #         self.ema.move_shadow_params_to_device(self.device)
