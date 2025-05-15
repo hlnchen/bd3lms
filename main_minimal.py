@@ -236,7 +236,7 @@ def _train(config, logger, tokenizer):
         default_root_dir=os.getcwd(),
         callbacks=callbacks,
         strategy=hydra.utils.instantiate(config.strategy),
-        logger=[logger, wandb_logger],
+        loggers=[logger, wandb_logger],
     )
 
     # Train with the model and dataloaders set up by fabric
