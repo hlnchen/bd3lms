@@ -274,10 +274,7 @@ class Diffusion(L.LightningModule):
                 and self.trainer._accelerator_connector.is_distributed
             )
         except:
-            distributed = (
-                isinstance(self.trainer.fabric.strategy, L.fabric.strategies.XLAFSDPStrategy)
-                or isinstance(self.trainer.fabric.strategy, L.fabric.strategies.XLAStrategy)
-            )
+            distributed = True
         # Determine if we're using the method externally or in the normal training flow
         if dataloaders is None:
             dataloaders = self.trainer.fit_loop._combined_loader.flattened
