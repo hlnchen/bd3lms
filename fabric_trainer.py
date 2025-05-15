@@ -32,7 +32,6 @@ class FabricTrainer:
         num_sanity_val_steps: int = 2,
         val_check_interval: Union[int, float] = 1.0,
         default_root_dir: Optional[str] = None,
-        *args,
         **kwargs,
     ) -> None:
         """Exemplary Trainer with Fabric. This is a very simple trainer focused on readablity but with reduced
