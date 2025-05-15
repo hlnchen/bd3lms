@@ -159,37 +159,17 @@ def _ppl_eval(config, logger, tokenizer):
 
 # Define train_function at the top level for pickling in distributed training
 def _train(config, logger, tokenizer):
-    logger.info("Starting Training.")
-    # Configure the training setup
     wandb_logger = None
     if config.get("wandb", None) is not None:
         wandb_logger = L.pytorch.loggers.WandbLogger(
             config=omegaconf.OmegaConf.to_object(config), **config.wandb
         )
-
-    if (
-        config.checkpointing.resume_from_ckpt
-        and config.checkpointing.resume_ckpt_path is not None
-        and utils.fsspec_exists(config.checkpointing.resume_ckpt_path)
-    ):
-        ckpt_path = config.checkpointing.resume_ckpt_path
-        logger.info(f"Resuming training at {ckpt_path}")
-    else:
-        ckpt_path = None
-
     # Lightning callbacks
     callbacks = []
     if "callbacks" in config:
         for _, callback in config.callbacks.items():
             callbacks.append(hydra.utils.instantiate(callback))
 
-    # Get dataloaders - prepare data happens inside this call
-    train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
-
-    # Print batch information
-    _print_batch(train_ds, valid_ds, tokenizer)
-
-    # Create a Fabric instance
     strategy = hydra.utils.instantiate(config.strategy)
     fabric = L.Fabric(
         accelerator=config.trainer.accelerator,
@@ -200,6 +180,28 @@ def _train(config, logger, tokenizer):
         callbacks=callbacks,
         loggers=[logger, wandb_logger] if wandb_logger else [logger],
     )
+    fabric.launch(train_function, config, logger, tokenizer)
+
+
+def train_function(fabric, config, logger, tokenizer):
+    logger.info("Starting Training.")
+    # Configure the training setup
+    if (
+        config.checkpointing.resume_from_ckpt
+        and config.checkpointing.resume_ckpt_path is not None
+        and utils.fsspec_exists(config.checkpointing.resume_ckpt_path)
+    ):
+        ckpt_path = config.checkpointing.resume_ckpt_path
+        logger.info(f"Resuming training at {ckpt_path}")
+    else:
+        ckpt_path = None
+
+
+    # Get dataloaders - prepare data happens inside this call
+    train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
+
+    # Print batch information
+    _print_batch(train_ds, valid_ds, tokenizer)
 
     # Setup dataloaders with fabric
     # train_ds = fabric.setup_dataloaders(train_ds)
@@ -247,7 +249,7 @@ def _train(config, logger, tokenizer):
     )
 
     # Train with the model and dataloaders set up by fabric
-    fabric.launch(trainer.fit, model, train_ds, valid_ds, ckpt_path)
+    trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
