@@ -149,8 +149,6 @@ class FabricTrainer:
         self.model = model
         model.trainer = self
         print(f"type(model): {type(model)}")
-        print(f"backbone params: {next(model.backbone.parameters())}")
-        print(f"noise params: {next(model.noise.parameters())}")
         print(f"params: {next(model._get_parameters())}")
         optimizer, scheduler_cfg = self._parse_optimizers_schedulers(
             model.configure_optimizers()
