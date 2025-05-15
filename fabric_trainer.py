@@ -8,9 +8,6 @@ from lightning_utilities import apply_to_collection
 from tqdm import tqdm
 
 import lightning as L
-from lightning.fabric.accelerators import Accelerator
-from lightning.fabric.loggers import Logger
-from lightning.fabric.strategies import Strategy
 from lightning.fabric.wrappers import _unwrap_objects
 from lightning.pytorch.utilities.model_helpers import is_overridden
 
@@ -20,20 +17,12 @@ from diffusion import Diffusion
 class FabricTrainer:
     def __init__(
         self,
-        accelerator: Union[str, Accelerator] = "auto",
-        strategy: Union[str, Strategy] = "auto",
-        devices: Union[list[int], str, int] = "auto",
-        num_nodes: int = 1,
-        precision: Union[str, int] = "32-true",
-        plugins: Optional[Union[str, Any]] = None,
-        callbacks: Optional[Union[list[Any], Any]] = None,
-        loggers: Optional[Union[Logger, list[Logger]]] = None,
+        fabric: L.Fabric,
         max_epochs: Optional[int] = 1000,
         max_steps: Optional[int] = None,
         limit_train_batches: Union[int, float] = float("inf"),
         limit_val_batches: Union[int, float] = float("inf"),
         validation_frequency: int = 1,
-        use_distributed_sampler: bool = True,
         checkpoint_dir: str = "./checkpoints",
         checkpoint_frequency: int = 1,
         log_every_n_steps: int = 50,
@@ -49,46 +38,7 @@ class FabricTrainer:
         :class:`lightning.pytorch.Trainer`.
 
         Args:
-            accelerator: The hardware to run on. Possible choices are:
-                ``"cpu"``, ``"cuda"``, ``"mps"``, ``"gpu"``, ``"tpu"``, ``"auto"``.
-            strategy: Strategy for how to run across multiple devices. Possible choices are:
-                ``"dp"``, ``"ddp"``, ``"ddp_spawn"``, ``"deepspeed"``, ``"fsdp"``.
-            devices: Number of devices to train on (``int``),
-                which GPUs to train on (``list`` or ``str``), or ``"auto"``.
-                The value applies per node.
-            num_nodes: Number of compute nodes for distributed training.
-                Default: ``1``.
-            precision: Double precision (``"64"``), full precision (``"32"``), half precision AMP (``"16-mixed"``),
-                or bfloat16 precision AMP (``"bf16-mixed"``).
-            plugins: One or several custom plugins
-            callbacks: A single callback or a list of callbacks. The following hooks are supported:
-                - on_train_epoch_start
-                - on train_epoch_end
-                - on_train_batch_start
-                - on_train_batch_end
-                - on_before_backward
-                - on_after_backward
-                - on_before_zero_grad
-                - on_before_optimizer_step
-                - on_validation_model_eval
-                - on_validation_model_train
-                - on_validation_epoch_start
-                - on_validation_epoch_end
-                - on_validation_batch_start
-                - on_validation_batch_end
-                TODO: hooks from the model:
-                    - on_load_checkpoint (Done)
-                    - on_save_checkpoint (Done)
-                    - on_train_start (Done)
-                    - on_train_epoch_start (Done)
-                    - on_validation_epoch_start (Done)
-                    - on_validation_epoch_end (Done)
-                    - on_validation_model_zero_grad (Done)
-
-
-            loggers: A single logger or a list of loggers. See :meth:`~lightning.fabric.fabric.Fabric.log` for more
-                information.
-
+            fabric: The Lightning Fabric instance to use.
             max_epochs: The maximum number of epochs to train
             max_steps: The maximum number of (optimizer) steps to train
             limit_train_batches: Limits the number of train batches per epoch
@@ -96,8 +46,6 @@ class FabricTrainer:
             limit_val_batches: Limits the number of validation batches per epoch.
                 If greater than number of batches in the dataloader, this has no effect.
             validation_frequency: How many epochs to run before each validation epoch.
-            use_distributed_sampler: Wraps the sampler of each dataloader with a respective distributed-aware sampler
-                in case of distributed training.
             checkpoint_dir: Directory to store checkpoints to.
             checkpoint_frequency: How many epochs to run before each checkpoint is written.
             log_every_n_steps: How often to log within steps.
@@ -132,16 +80,7 @@ class FabricTrainer:
         if checkpoint_dir == "./checkpoints" and default_root_dir is not None:
             checkpoint_dir = os.path.join(self.default_root_dir, "checkpoints")
 
-        self.fabric = L.Fabric(
-            accelerator=accelerator,
-            strategy=strategy,
-            devices=devices,
-            num_nodes=num_nodes,
-            precision=precision,
-            plugins=plugins,
-            callbacks=callbacks,
-            loggers=loggers,
-        )
+        self.fabric = fabric
         self.global_step = 0
         self.grad_accum_steps: int = accumulate_grad_batches
         self.current_epoch = 0
@@ -162,7 +101,6 @@ class FabricTrainer:
         self.limit_val_batches = limit_val_batches
 
         self.validation_frequency = validation_frequency
-        self.use_distributed_sampler = use_distributed_sampler
         self._current_train_return: Union[torch.Tensor, Mapping[str, Any]] = {}
         self._current_val_return: Optional[Union[torch.Tensor, Mapping[str, Any]]] = {}
 
@@ -195,13 +133,9 @@ class FabricTrainer:
 
         """
         # setup dataloaders
-        train_loader = self.fabric.setup_dataloaders(
-            train_loader, use_distributed_sampler=self.use_distributed_sampler
-        )
+        train_loader = self.fabric.setup_dataloaders(train_loader)
         if val_loader is not None:
-            val_loader = self.fabric.setup_dataloaders(
-                val_loader, use_distributed_sampler=self.use_distributed_sampler
-            )
+            val_loader = self.fabric.setup_dataloaders(val_loader)
 
         # setup model and optimizer
         if isinstance(self.fabric.strategy, L.fabric.strategies.fsdp.FSDPStrategy):
@@ -441,7 +375,6 @@ class FabricTrainer:
                     if isinstance(v, torch.Tensor):
                         val_metrics.setdefault(f"val_{k}", 0)
                         val_metrics[f"val_{k}"] += v.item()
-
 
         # Log validation metrics at the end of validation
         if val_metrics and hasattr(self.fabric, "log_dict"):

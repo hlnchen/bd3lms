@@ -186,11 +186,20 @@ def _train(config, logger, tokenizer):
     # Get dataloaders - prepare data happens inside this call
     train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
 
-    # # Make sure all ranks have finished preparing data before proceeding
-    # fabric.barrier("data_preparation_complete")
-
-    # if fabric.global_rank == 0:
+    # Print batch information
     _print_batch(train_ds, valid_ds, tokenizer)
+
+    # Create a Fabric instance
+    strategy = hydra.utils.instantiate(config.strategy)
+    fabric = L.Fabric(
+        accelerator=config.trainer.accelerator,
+        devices=config.trainer.devices,
+        num_nodes=config.trainer.num_nodes,
+        strategy=strategy,
+        precision=config.trainer.precision,
+        callbacks=callbacks,
+        loggers=[logger, wandb_logger] if wandb_logger else [logger],
+    )
 
     # Setup dataloaders with fabric
     # train_ds = fabric.setup_dataloaders(train_ds)
@@ -230,41 +239,15 @@ def _train(config, logger, tokenizer):
     # Setup model with fabric
     # model = fabric.setup_module(model)
 
-    # Create trainer using fabric's strategy
+    # Create trainer using fabric
     trainer = hydra.utils.instantiate(
         config.trainer,
+        fabric=fabric,  # Pass the fabric instance to the trainer
         default_root_dir=os.getcwd(),
-        callbacks=callbacks,
-        strategy=hydra.utils.instantiate(config.strategy),
-        loggers=[logger, wandb_logger],
     )
 
     # Train with the model and dataloaders set up by fabric
-    trainer.fabric.launch(trainer.fit, model, train_ds, valid_ds, ckpt_path=ckpt_path)
-
-
-# def _train(config, logger, tokenizer):
-#     logger.info("Starting Training.")
-#     # Configure the training setup
-#     wandb_logger = None
-#     if config.get("wandb", None) is not None:
-#         wandb_logger = L.pytorch.loggers.WandbLogger(
-#             config=omegaconf.OmegaConf.to_object(config), **config.wandb
-#         )
-
-    # Use Fabric to handle the distributed communication setup
-    # strategy = hydra.utils.instantiate(config.strategy)
-    # fabric = L.Fabric(
-    #     accelerator=config.trainer.accelerator,
-    #     devices=config.trainer.devices,
-    #     num_nodes=config.trainer.num_nodes,
-    #     strategy=strategy,
-    #     precision=config.trainer.precision,
-    #     logger=wandb_logger,
-    # )
-    # train_function(config, logger, tokenizer)
-    # Launch the training function in a distributed environment with explicit arguments
-    # fabric.launch(train_function, config, logger, tokenizer)
+    fabric.launch(trainer.fit, model, train_ds, valid_ds, ckpt_path)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
