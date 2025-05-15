@@ -159,7 +159,7 @@ class FabricTrainer:
             )
             model, optimizer = self.fabric.setup(model, optimizer)
         self.lr_scheduler_configs = scheduler_cfg
-
+        print("lr_scheduler_configs", self.lr_scheduler_configs)
         # NOTE: exprimental, not sure if this is correct
         self.model = model
         model.trainer = self
@@ -521,18 +521,6 @@ class FabricTrainer:
             # If we can't determine train loader length, fall back to epoch-based validation
             return False
 
-    def progbar_wrapper(self, iterable: Iterable, total: int, **kwargs: Any):
-        """Wraps the iterable with tqdm for global rank zero.
-
-        Args:
-            iterable: the iterable to wrap with tqdm
-            total: the total length of the iterable, necessary in case the number of batches was limited.
-
-        """
-        if self.fabric.is_global_zero:
-            return tqdm(iterable, total=total, **kwargs)
-        return iterable
-
     def load(self, state: Optional[Mapping], path: str) -> None:
         """Loads a checkpoint from a given file into state.
 
@@ -677,11 +665,7 @@ class FabricTrainer:
             else len(val_loader)
         )
 
-        iterable = self.progbar_wrapper(
-            val_loader, total=limit, desc="Validation Sanity Check"
-        )
-
-        for batch_idx, batch in enumerate(iterable):
+        for batch_idx, batch in enumerate(val_loader):
             if batch_idx >= limit and self.num_sanity_val_steps != -1:
                 break
 
