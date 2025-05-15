@@ -1,7 +1,7 @@
 defaults:
   - _self_
-  - /callbacks: [] # [checkpoint_every_n_steps, checkpoint_monitor, learning_rate_monitor]
-  - /data: openwebtext-streaming
+  - /callbacks: [checkpoint_every_n_steps, checkpoint_monitor, learning_rate_monitor]
+  - /data: openwebtext
   - /model: small
   - /strategy: ddp
   - /noise: loglinear
@@ -61,18 +61,17 @@ optim:
 
 trainer:
   _target_: lightning.Trainer
-  accelerator: tpu
-  num_nodes: 2
-  devices: 4
+  accelerator: cuda
+  num_nodes: 1
+  devices: 256
   accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:${trainer.devices} * ${loader.batch_size} * ${trainer.num_nodes}}}
-  # accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:8 * ${loader.batch_size}}}
   gradient_clip_val: 1.0
-  precision: 'bf16-true'
+  precision: 'bf16'
   num_sanity_val_steps: 2
   max_steps: 1_000_000
   log_every_n_steps: 1_000
-  # limit_train_batches: 1.0   # train on full dataset, can be used to toggle quick run
-  # limit_val_batches: 1.0     # validate on full dataset, can be used to toggle quick run
+  limit_train_batches: 1.0   # train on full dataset, can be used to toggle quick run
+  limit_val_batches: 1.0     # validate on full dataset, can be used to toggle quick run
   val_check_interval: 10_000
 
 wandb:
