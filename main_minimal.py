@@ -240,7 +240,7 @@ def _train(config, logger, tokenizer):
     )
 
     # Train with the model and dataloaders set up by fabric
-    trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
+    trainer.fabric.launch(trainer.fit, model, train_ds, valid_ds, ckpt_path=ckpt_path)
 
 
 # def _train(config, logger, tokenizer):
