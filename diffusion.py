@@ -400,7 +400,7 @@ class Diffusion(L.LightningModule):
             return self._sedd_parameterization(logits=logits, xt=x, sigma=sigma)
         return logits
 
-    def on_train_epoch_start(self):
+    def on_train_epoch_start(self, *args, **kwargs):
         self.backbone.train()
         self.noise.train()
         self.metrics.reset()
@@ -420,7 +420,7 @@ class Diffusion(L.LightningModule):
         )
         return losses.loss
 
-    def on_validation_epoch_start(self):
+    def on_validation_epoch_start(self, *args, **kwargs):
         self.metrics.reset()
         if self.ema:
             self.ema.store(
@@ -436,7 +436,7 @@ class Diffusion(L.LightningModule):
         assert self.metrics.valid_nlls.nll.weight == 0
         self.sampling_eps = self.config.training.sampling_eps
 
-    def on_validation_epoch_end(self):
+    def on_validation_epoch_end(self, *args, **kwargs):
         for k, v in self.metrics.valid_nlls.items():
             self.log(
                 name=k, value=v.compute(), on_step=False, on_epoch=True, sync_dist=True
