@@ -82,6 +82,7 @@ class FabricTrainer:
             checkpoint_dir = os.path.join(self.default_root_dir, "checkpoints")
 
         self.fabric = fabric
+        self.loggers = self.fabric.loggers
         self.global_step = 0
         self.grad_accum_steps: int = accumulate_grad_batches
         self.current_epoch = 0

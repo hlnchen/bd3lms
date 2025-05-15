@@ -30,6 +30,7 @@ logging.getLogger("lightning.pytorch").setLevel(logging.DEBUG)
 import dataloader
 import diffusion
 import utils
+import fabric_trainer
 
 omegaconf.OmegaConf.register_new_resolver("cwd", os.getcwd)
 omegaconf.OmegaConf.register_new_resolver("device_count", torch.cuda.device_count)
@@ -254,7 +255,7 @@ def train_function(fabric: L.Fabric, config, logger, tokenizer):
     # model = fabric.setup_module(model)
 
     # Create trainer using fabric
-    trainer = hydra.utils.instantiate(
+    trainer: fabric_trainer.FabricTrainer = hydra.utils.instantiate(
         config.trainer,
         fabric=fabric,  # Pass the fabric instance to the trainer
         default_root_dir=os.getcwd(),
