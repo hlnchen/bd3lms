@@ -37,6 +37,8 @@ python -u main_minimal.py \
     strategy=xla \
     training.resample=True \
     training.from_pretrained=$PRETRAIN_CKPT \
+    trainer._target_='fabric_trainer.FabricTrainer' \
     trainer.max_steps=100 \
     trainer.log_every_n_steps=10 \
-    trainer.precision='bf16-true'
+    trainer.precision='bf16-true' \
+    trainer.num_sanity_val_steps=0

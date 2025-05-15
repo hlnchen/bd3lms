@@ -27,10 +27,6 @@ import dataloader
 import diffusion
 import utils
 
-from lightning.fabric.strategies import (
-    XLAFSDPStrategy,
-)  # Can also use string "xla_fsdp"
-
 omegaconf.OmegaConf.register_new_resolver("cwd", os.getcwd)
 omegaconf.OmegaConf.register_new_resolver("device_count", torch.cuda.device_count)
 omegaconf.OmegaConf.register_new_resolver("eval", eval)
@@ -162,10 +158,11 @@ def _ppl_eval(config, logger, tokenizer):
 
 
 # Define train_function at the top level for pickling in distributed training
-def train_function(fabric, config, logger, tokenizer):
+def _train(config, logger, tokenizer):
+    logger.info("Starting Training.")
     # Configure the training setup
     wandb_logger = None
-    if config.get("wandb", None) is not None and fabric.global_rank == 0:
+    if config.get("wandb", None) is not None:
         wandb_logger = L.pytorch.loggers.WandbLogger(
             config=omegaconf.OmegaConf.to_object(config), **config.wandb
         )
@@ -189,15 +186,15 @@ def train_function(fabric, config, logger, tokenizer):
     # Get dataloaders - prepare data happens inside this call
     train_ds, valid_ds = dataloader.get_dataloaders(config, tokenizer)
 
-    # Make sure all ranks have finished preparing data before proceeding
-    fabric.barrier("data_preparation_complete")
+    # # Make sure all ranks have finished preparing data before proceeding
+    # fabric.barrier("data_preparation_complete")
 
-    if fabric.global_rank == 0:
-        _print_batch(train_ds, valid_ds, tokenizer)
+    # if fabric.global_rank == 0:
+    _print_batch(train_ds, valid_ds, tokenizer)
 
     # Setup dataloaders with fabric
-    train_ds = fabric.setup_dataloaders(train_ds)
-    valid_ds = fabric.setup_dataloaders(valid_ds)
+    # train_ds = fabric.setup_dataloaders(train_ds)
+    # valid_ds = fabric.setup_dataloaders(valid_ds)
 
     # Initialize or load model
     if config.training.from_pretrained is not None and ckpt_path is None:
@@ -231,36 +228,43 @@ def train_function(fabric, config, logger, tokenizer):
         model = diffusion.Diffusion(config, tokenizer=tokenizer)
 
     # Setup model with fabric
-    model = fabric.setup_module(model)
+    # model = fabric.setup_module(model)
 
     # Create trainer using fabric's strategy
     trainer = hydra.utils.instantiate(
         config.trainer,
         default_root_dir=os.getcwd(),
         callbacks=callbacks,
-        strategy=fabric.strategy,
-        logger=wandb_logger,
+        strategy=hydra.utils.instantiate(config.strategy),
+        logger=[logger, wandb_logger],
     )
 
     # Train with the model and dataloaders set up by fabric
     trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
 
 
-def _train(config, logger, tokenizer):
-    logger.info("Starting Training.")
+# def _train(config, logger, tokenizer):
+#     logger.info("Starting Training.")
+#     # Configure the training setup
+#     wandb_logger = None
+#     if config.get("wandb", None) is not None:
+#         wandb_logger = L.pytorch.loggers.WandbLogger(
+#             config=omegaconf.OmegaConf.to_object(config), **config.wandb
+#         )
 
     # Use Fabric to handle the distributed communication setup
-    strategy = hydra.utils.instantiate(config.strategy)
-    fabric = L.Fabric(
-        accelerator=config.trainer.accelerator,
-        devices=config.trainer.devices,
-        num_nodes=config.trainer.num_nodes,
-        strategy=strategy,
-        precision=config.trainer.precision,
-    )
-
+    # strategy = hydra.utils.instantiate(config.strategy)
+    # fabric = L.Fabric(
+    #     accelerator=config.trainer.accelerator,
+    #     devices=config.trainer.devices,
+    #     num_nodes=config.trainer.num_nodes,
+    #     strategy=strategy,
+    #     precision=config.trainer.precision,
+    #     logger=wandb_logger,
+    # )
+    # train_function(config, logger, tokenizer)
     # Launch the training function in a distributed environment with explicit arguments
-    fabric.launch(train_function, config, logger, tokenizer)
+    # fabric.launch(train_function, config, logger, tokenizer)
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")

@@ -66,7 +66,7 @@ trainer:
   devices: 4
   accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:${trainer.devices} * ${loader.batch_size} * ${trainer.num_nodes}}}
   gradient_clip_val: 1.0
-  precision: 'bf16'
+  precision: 'bf16-true'
   num_sanity_val_steps: 2
   max_steps: 1_000_000
   log_every_n_steps: 1_000

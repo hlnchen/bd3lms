@@ -197,18 +197,20 @@ class Diffusion(L.LightningModule):
             checkpoint = self._replace_ckpt_keys(checkpoint)
 
         if self.ema:
-            self.ema.load_state_dict(checkpoint["ema"])
+            self.ema.load_state_dict(checkpoint.pop("ema"))
         if "sampling_eps_min" in checkpoint.keys():
-            self.sampling_eps_min = checkpoint["sampling_eps_min"]
-            self.sampling_eps_max = checkpoint["sampling_eps_max"]
+            self.sampling_eps_min = checkpoint.pop("sampling_eps_min")
+            self.sampling_eps_max = checkpoint.pop("sampling_eps_max")
         # Copied from:
         # https://github.com/Dao-AILab/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py#L41
-        self.fast_forward_epochs = checkpoint["loops"]["fit_loop"]["epoch_progress"][
-            "current"
-        ]["completed"]
-        self.fast_forward_batches = checkpoint["loops"]["fit_loop"][
-            "epoch_loop.batch_progress"
-        ]["current"]["completed"]
+        loops = checkpoint.pop("loops", None)
+        if loops:
+            self.fast_forward_epochs = loops["fit_loop"]["epoch_progress"]["current"][
+                "completed"
+            ]
+            self.fast_forward_batches = loops["fit_loop"]["epoch_loop"][
+                "batch_progress"
+            ]["current"]["completed"]
 
     def on_save_checkpoint(self, checkpoint):
         if self.ema:
@@ -261,7 +263,7 @@ class Diffusion(L.LightningModule):
         else:
             checkpoint["sampler"]["random_state"] = None
 
-    def on_train_start(self):
+    def on_train_start(self, dataloaders=None):
         if self.ema:
             self.ema.move_shadow_params_to_device(self.device)
         # Adapted from:
@@ -270,16 +272,23 @@ class Diffusion(L.LightningModule):
             self.trainer._accelerator_connector.use_distributed_sampler
             and self.trainer._accelerator_connector.is_distributed
         )
+        # Determine if we're using the method externally or in the normal training flow
+        if dataloaders is None:
+            dataloaders = self.trainer.fit_loop._combined_loader.flattened
         if distributed:
             sampler_cls = dataloader.FaultTolerantDistributedSampler
         else:
             sampler_cls = dataloader.RandomFaultTolerantSampler
         updated_dls = []
-        for dl in self.trainer.fit_loop._combined_loader.flattened:
+        for dl in dataloaders:
             if hasattr(dl.sampler, "shuffle"):
-                dl_sampler = sampler_cls(dl.dataset, shuffle=dl.sampler.shuffle)
+                dl_sampler = sampler_cls(
+                    dl.dataset,
+                    shuffle=dl.sampler.shuffle,
+                )
             else:
                 dl_sampler = sampler_cls(dl.dataset)
+            # Handle fast-forwarding (if applicable)
             if (
                 distributed
                 and self.fast_forward_epochs is not None
@@ -293,6 +302,7 @@ class Diffusion(L.LightningModule):
                         ),
                     }
                 )
+            # Create updated dataloader
             updated_dls.append(
                 torch.utils.data.DataLoader(
                     dl.dataset,
@@ -304,7 +314,9 @@ class Diffusion(L.LightningModule):
                     persistent_workers=True,
                 )
             )
-        self.trainer.fit_loop._combined_loader.flattened = updated_dls
+        if hasattr(self.trainer, "fit_loop"):
+            self.trainer.fit_loop._combined_loader.flattened = updated_dls
+        return updated_dls
 
     def optimizer_step(self, *args, **kwargs):
         super().optimizer_step(*args, **kwargs)
