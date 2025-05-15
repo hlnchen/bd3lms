@@ -6,6 +6,10 @@ TODO:
 - adapt train to fabric
 - change the config of configs/callbacks/ if necessary
 - data/checkpoints saving/loading to/from GCS
+
+Check the following:
+- Both every_n_train_steps and every_n_epochs are not set. Setting every_n_epochs=1
+- RuntimeError: The `XLAStrategy` requires the model and optimizer(s) to be set up jointly through `.setup(model, optimizer, ...)`.
 """
 
 import os
@@ -169,8 +173,10 @@ def _train(config, logger, tokenizer):
     if "callbacks" in config:
         for _, callback in config.callbacks.items():
             callbacks.append(hydra.utils.instantiate(callback))
-
+    
     strategy = hydra.utils.instantiate(config.strategy)
+    if isinstance(strategy, L.fabric.strategies.XLAFSDPStrategy):
+        strategy.auto_wrap_policy = {diffusion.Diffusion}
     fabric = L.Fabric(
         accelerator=config.trainer.accelerator,
         devices=config.trainer.devices,
