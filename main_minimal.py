@@ -243,6 +243,8 @@ def train_function(fabric, config, logger, tokenizer):
     else:
         logger.info(f"Initializing new model")
         model = diffusion.Diffusion(config, tokenizer=tokenizer)
+        print(f"model: {type(model)}")
+        print(f"params: {next(model._get_parameters())}")
 
     # Setup model with fabric
     # model = fabric.setup_module(model)

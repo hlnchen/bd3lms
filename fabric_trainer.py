@@ -148,8 +148,7 @@ class FabricTrainer:
         # NOTE: exprimental, not sure if this is correct
         self.model = model
         model.trainer = self
-        print(f"type(model): {type(model)}")
-        print(f"params: {next(model._get_parameters())}")
+
         optimizer, scheduler_cfg = self._parse_optimizers_schedulers(
             model.configure_optimizers()
         )
