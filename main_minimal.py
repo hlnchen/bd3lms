@@ -195,7 +195,7 @@ def _train(config, logger, tokenizer):
     fabric.launch(train_function, config, logger, tokenizer)
 
 
-def train_function(fabric, config, logger, tokenizer):
+def train_function(fabric: L.Fabric, config, logger, tokenizer):
     logger.info("Starting Training.")
     # Configure the training setup
     if (
@@ -249,8 +249,6 @@ def train_function(fabric, config, logger, tokenizer):
     else:
         logger.info(f"Initializing new model")
         model = diffusion.Diffusion(config, tokenizer=tokenizer)
-        print(f"model: {type(model)}")
-        print(f"params: {next(model._get_parameters())}")
 
     # Setup model with fabric
     # model = fabric.setup_module(model)
@@ -261,7 +259,7 @@ def train_function(fabric, config, logger, tokenizer):
         fabric=fabric,  # Pass the fabric instance to the trainer
         default_root_dir=os.getcwd(),
     )
-
+    fabric.call("on_train_start", trainer=trainer)
     # Train with the model and dataloaders set up by fabric
     trainer.fit(model, train_ds, valid_ds, ckpt_path=ckpt_path)
 

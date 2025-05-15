@@ -263,63 +263,64 @@ class Diffusion(L.LightningModule):
         else:
             checkpoint["sampler"]["random_state"] = None
 
-    def on_train_start(self, dataloaders=None):
-        if self.ema:
-            self.ema.move_shadow_params_to_device(self.device)
-        # Adapted from:
-        # https://github.com/Dao-AILab/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py
-        try:
-            distributed = (
-                self.trainer._accelerator_connector.use_distributed_sampler
-                and self.trainer._accelerator_connector.is_distributed
-            )
-        except:
-            distributed = True
-        # Determine if we're using the method externally or in the normal training flow
-        if dataloaders is None:
-            dataloaders = self.trainer.fit_loop._combined_loader.flattened
-        if distributed:
-            sampler_cls = dataloader.FaultTolerantDistributedSampler
-        else:
-            sampler_cls = dataloader.RandomFaultTolerantSampler
-        updated_dls = []
-        for dl in dataloaders:
-            if hasattr(dl, "sampler") and hasattr(dl.sampler, "shuffle"):
-                dl_sampler = sampler_cls(
-                    dl.dataset,
-                    shuffle=dl.sampler.shuffle,
-                )
-            else:
-                dl_sampler = sampler_cls(dl.dataset)
-            # Handle fast-forwarding (if applicable)
-            if (
-                distributed
-                and self.fast_forward_epochs is not None
-                and self.fast_forward_batches is not None
-            ):
-                dl_sampler.load_state_dict(
-                    {
-                        "epoch": self.fast_forward_epochs,
-                        "counter": (
-                            self.fast_forward_batches * self.config.loader.batch_size
-                        ),
-                    }
-                )
-            # Create updated dataloader
-            updated_dls.append(
-                torch.utils.data.DataLoader(
-                    dl.dataset,
-                    batch_size=self.config.loader.batch_size,
-                    num_workers=self.config.loader.num_workers,
-                    pin_memory=self.config.loader.pin_memory,
-                    sampler=dl_sampler,
-                    shuffle=False,
-                    persistent_workers=True,
-                )
-            )
-        if hasattr(self.trainer, "fit_loop"):
-            self.trainer.fit_loop._combined_loader.flattened = updated_dls
-        return updated_dls
+    # NOTE: let fabric handle distributed samplers
+    # def on_train_start(self, dataloaders=None):
+    #     if self.ema:
+    #         self.ema.move_shadow_params_to_device(self.device)
+    #     # Adapted from:
+    #     # https://github.com/Dao-AILab/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py
+    #     try:
+    #         distributed = (
+    #             self.trainer._accelerator_connector.use_distributed_sampler
+    #             and self.trainer._accelerator_connector.is_distributed
+    #         )
+    #     except:
+    #         distributed = True
+    #     # Determine if we're using the method externally or in the normal training flow
+    #     if dataloaders is None:
+    #         dataloaders = self.trainer.fit_loop._combined_loader.flattened
+    #     if distributed:
+    #         sampler_cls = dataloader.FaultTolerantDistributedSampler
+    #     else:
+    #         sampler_cls = dataloader.RandomFaultTolerantSampler
+    #     updated_dls = []
+    #     for dl in dataloaders:
+    #         if hasattr(dl, "sampler") and hasattr(dl.sampler, "shuffle"):
+    #             dl_sampler = sampler_cls(
+    #                 dl.dataset,
+    #                 shuffle=dl.sampler.shuffle,
+    #             )
+    #         else:
+    #             dl_sampler = sampler_cls(dl.dataset)
+    #         # Handle fast-forwarding (if applicable)
+    #         if (
+    #             distributed
+    #             and self.fast_forward_epochs is not None
+    #             and self.fast_forward_batches is not None
+    #         ):
+    #             dl_sampler.load_state_dict(
+    #                 {
+    #                     "epoch": self.fast_forward_epochs,
+    #                     "counter": (
+    #                         self.fast_forward_batches * self.config.loader.batch_size
+    #                     ),
+    #                 }
+    #             )
+    #         # Create updated dataloader
+    #         updated_dls.append(
+    #             torch.utils.data.DataLoader(
+    #                 dl.dataset,
+    #                 batch_size=self.config.loader.batch_size,
+    #                 num_workers=self.config.loader.num_workers,
+    #                 pin_memory=self.config.loader.pin_memory,
+    #                 sampler=dl_sampler,
+    #                 shuffle=False,
+    #                 persistent_workers=True,
+    #             )
+    #         )
+    #     if hasattr(self.trainer, "fit_loop"):
+    #         self.trainer.fit_loop._combined_loader.flattened = updated_dls
+    #     return updated_dls
 
     def optimizer_step(self, *args, **kwargs):
         super().optimizer_step(*args, **kwargs)

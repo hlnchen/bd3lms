@@ -241,13 +241,12 @@ class FabricTrainer:
             if self.should_stop or batch_idx >= limit_batches:
                 break
 
-            self.fabric.call("on_train_batch_start", batch, batch_idx)
+            self.fabric.call("on_train_batch_start", self, batch, batch_idx)
 
             # check if optimizer should step in gradient accumulation
             should_optim_step = self.global_step % self.grad_accum_steps == 0
             if should_optim_step:
-                # currently only supports a single optimizer
-                self.fabric.call("on_before_optimizer_step", optimizer)
+                # self.fabric.call("on_before_optimizer_step", optimizer)
 
                 # optimizer step runs train step internally through closure
                 optimizer.step(
@@ -276,7 +275,7 @@ class FabricTrainer:
                         **clip_kwargs,
                     )
 
-                self.fabric.call("on_before_zero_grad", optimizer)
+                # self.fabric.call("on_before_zero_grad", optimizer)
 
                 optimizer.zero_grad()
 
@@ -285,7 +284,12 @@ class FabricTrainer:
                 self.training_step(model=model, batch=batch, batch_idx=batch_idx)
 
             self.fabric.call(
-                "on_train_batch_end", self._current_train_return, batch, batch_idx
+                "on_train_batch_end",
+                trainer=self,
+                pl_module=model,
+                batch=batch,
+                batch_idx=batch_idx,
+                outputs=self._current_train_return,
             )
 
             # this guard ensures, we only step the scheduler once per global step
@@ -313,7 +317,7 @@ class FabricTrainer:
                 self.should_stop = True
                 break
 
-        self.fabric.call("on_train_epoch_end")
+        self.fabric.call("on_train_epoch_end", trainer=self, pl_module=model)
 
     def val_loop(
         self,
