@@ -144,16 +144,15 @@ class FabricTrainer:
             # as it would require fabric to hold a reference to the model, which we don't want to.
             raise NotImplementedError("BYOT currently does not support FSDP")
 
-        optimizer, scheduler_cfg = self._parse_optimizers_schedulers(
-            model.configure_optimizers()
-        )
-        assert optimizer is not None
-
         model = self.fabric.setup_module(model)
         # NOTE: exprimental, not sure if this is correct
         self.model = model
         model.trainer = self
 
+        optimizer, scheduler_cfg = self._parse_optimizers_schedulers(
+            model.configure_optimizers()
+        )
+        assert optimizer is not None
         optimizer = self.fabric.setup_optimizers(optimizer)
 
         # assemble state (current epoch and global step will be added in save)
