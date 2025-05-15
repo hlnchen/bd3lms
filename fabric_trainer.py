@@ -158,6 +158,7 @@ class FabricTrainer:
                 model.configure_optimizers()
             )
             model, optimizer = self.fabric.setup(model, optimizer)
+        self.lr_scheduler_configs = scheduler_cfg
 
         # NOTE: exprimental, not sure if this is correct
         self.model = model
@@ -182,6 +183,8 @@ class FabricTrainer:
         # Run sanity check validation before training starts
         if self.num_sanity_val_steps > 0 and val_loader is not None:
             self._run_sanity_check(model, val_loader)
+
+        self.fabric.call("on_train_start", trainer=self, pl_module=model)
 
         while not self.should_stop:
             self.train_loop(
