@@ -245,7 +245,7 @@ class FabricTrainer:
             if self.should_stop or batch_idx >= limit_batches:
                 break
 
-            self.fabric.call("on_train_batch_start", trainer=self, batch=batch, batch_idx=batch_idx)
+            self.fabric.call("on_train_batch_start", trainer=self, pl_module=model, batch=batch, batch_idx=batch_idx)
 
             # check if optimizer should step in gradient accumulation
             should_optim_step = self.global_step % self.grad_accum_steps == 0
