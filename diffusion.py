@@ -410,6 +410,10 @@ class Diffusion(L.LightningModule):
         assert self.metrics.train_nlls.nll.mean_value == 0
         assert self.metrics.train_nlls.nll.weight == 0
 
+    # NOTE: dummy function to avoid error
+    def on_train_batch_start(self, *args, **kwargs):
+        print("batch start")
+
     def training_step(self, batch, batch_idx):
         del batch_idx
         losses = self._loss(batch["input_ids"], batch["attention_mask"])
