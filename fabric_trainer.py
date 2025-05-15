@@ -157,8 +157,10 @@ class FabricTrainer:
         if not isinstance(limit_val_batches, int):
             assert limit_val_batches == float("inf")
 
+        # TODO: exmaine if these two batches are used correctly.
         self.limit_train_batches = limit_train_batches
         self.limit_val_batches = limit_val_batches
+
         self.validation_frequency = validation_frequency
         self.use_distributed_sampler = use_distributed_sampler
         self._current_train_return: Union[torch.Tensor, Mapping[str, Any]] = {}
@@ -298,13 +300,8 @@ class FabricTrainer:
 
         """
         self.fabric.call("on_train_epoch_start")
-        iterable = self.progbar_wrapper(
-            train_loader,
-            total=min(len(train_loader), limit_batches),
-            desc=f"Epoch {self.current_epoch}",
-        )
 
-        for batch_idx, batch in enumerate(iterable):
+        for batch_idx, batch in enumerate(train_loader):
             # end epoch if stopping training completely or max batches for this epoch reached
             if self.should_stop or batch_idx >= limit_batches:
                 break
@@ -361,9 +358,6 @@ class FabricTrainer:
                 self.step_scheduler(
                     model, scheduler_cfg, level="step", current_value=self.global_step
                 )
-
-            # add output values to progress bar
-            self._format_iterable(iterable, self._current_train_return, "train")
 
             # Log metrics based on log_every_n_steps
             if self.global_step % self.log_every_n_steps == 0:
@@ -424,13 +418,8 @@ class FabricTrainer:
 
         self.fabric.call("on_validation_epoch_start")
 
-        iterable = self.progbar_wrapper(
-            val_loader, total=min(len(val_loader), limit_batches), desc="Validation"
-        )
-
         val_metrics = {}
-
-        for batch_idx, batch in enumerate(iterable):
+        for batch_idx, batch in enumerate(val_loader):
             # end epoch if stopping training completely or max batches for this epoch reached
             if self.should_stop or batch_idx >= limit_batches:
                 break
@@ -454,7 +443,6 @@ class FabricTrainer:
                         val_metrics.setdefault(f"val_{k}", 0)
                         val_metrics[f"val_{k}"] += v.item()
 
-            self._format_iterable(iterable, self._current_val_return, "val")
 
         # Log validation metrics at the end of validation
         if val_metrics and hasattr(self.fabric, "log_dict"):
@@ -721,36 +709,6 @@ class FabricTrainer:
                 return opt_cands, lr_cands
 
         return None, None
-
-    @staticmethod
-    def _format_iterable(
-        prog_bar,
-        candidates: Optional[
-            Union[torch.Tensor, Mapping[str, Union[torch.Tensor, float, int]]]
-        ],
-        prefix: str,
-    ):
-        """Adds values as postfix string to progressbar.
-
-        Args:
-            prog_bar: a progressbar (on global rank zero) or an iterable (every other rank).
-            candidates: the values to add as postfix strings to the progressbar.
-            prefix: the prefix to add to each of these values.
-
-        """
-        if isinstance(prog_bar, tqdm) and candidates is not None:
-            postfix_str = ""
-            float_candidates = apply_to_collection(
-                candidates, torch.Tensor, lambda x: x.item()
-            )
-            if isinstance(candidates, torch.Tensor):
-                postfix_str += f" {prefix}_loss: {float_candidates:.3f}"
-            elif isinstance(candidates, Mapping):
-                for k, v in float_candidates.items():
-                    postfix_str += f" {prefix}_{k}: {v:.3f}"
-
-            if postfix_str:
-                prog_bar.set_postfix_str(postfix_str)
 
     def _run_sanity_check(
         self, model: L.LightningModule, val_loader: torch.utils.data.DataLoader

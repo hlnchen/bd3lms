@@ -41,4 +41,4 @@ python -u main_minimal.py \
     trainer.max_steps=100 \
     trainer.log_every_n_steps=10 \
     trainer.precision='bf16-true' \
-    trainer.num_sanity_val_steps=0
+    trainer.num_sanity_val_steps=0 \
