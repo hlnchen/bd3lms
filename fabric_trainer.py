@@ -178,11 +178,6 @@ class FabricTrainer:
                 ):
                     self.should_stop = True
 
-        # NOTE: exprimental, reloading distributed samplers
-        train_loader, val_loader = self.model.on_train_start(
-            dataloaders=[train_loader, val_loader]
-        )
-
         # Run sanity check validation before training starts
         if self.num_sanity_val_steps > 0 and val_loader is not None:
             self._run_sanity_check(model, val_loader)
