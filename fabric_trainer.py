@@ -158,7 +158,8 @@ class FabricTrainer:
             optimizer, scheduler_cfg = optimizers[0], scheduler_cfgs[0]
             model, optimizer = self.fabric.setup(model, optimizer)
         self.lr_scheduler_configs = scheduler_cfg
-        print("lr_scheduler_configs", self.lr_scheduler_configs)
+        print("lr_scheduler_configs", self.lr_scheduler_configs, type(self.lr_scheduler_configs))
+        print("scheduler", self.lr_scheduler_configs.scheduler, type(self.lr_scheduler_configs.scheduler))
         # NOTE: exprimental, not sure if this is correct
         self.model = model
         model.trainer = self
