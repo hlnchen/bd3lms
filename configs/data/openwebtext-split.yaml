@@ -1,9 +1,9 @@
 train: openwebtext-train
 valid: openwebtext-valid
 tokenizer_name_or_path: gpt2
-cache_dir: ~/cached_data/openwebtext_split
+cache_dir: /home/shiyu.wang/bd3lms/data_dir/data_dir
 wrap: True
-streaming: False
+streaming: True
 insert_train_eos: True
 insert_valid_eos: True
 insert_train_special: True
