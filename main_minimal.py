@@ -262,16 +262,13 @@ def train_function(fabric: L.Fabric, config, logger, tokenizer):
     #     default_root_dir=os.getcwd(),
     # )
     if isinstance(fabric.strategy, fabric_strategies.XLAStrategy):
-        # from lightning.pytorch.strategies import StrategyRegistry
-        # STRATEGY_REGISTRY.register("xla")
-        strategy = "xla"
-    else:
-        strategy = fabric.strategy
+        from lightning.pytorch.strategies import StrategyRegistry
+        StrategyRegistry.register("xla_fabric", fabric_strategies.XLAStrategy)
     trainer = hydra.utils.instantiate(
         config.trainer,
         default_root_dir=os.getcwd(),
         callbacks=config.callbacks,
-        strategy=strategy,
+        strategy=fabric.strategy,
         logger=fabric.loggers,
     )
     # Train with the model and dataloaders set up by fabric
