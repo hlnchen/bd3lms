@@ -176,7 +176,13 @@ def _train(config, logger, tokenizer):
     
     strategy = hydra.utils.instantiate(config.strategy)
     if isinstance(strategy, L.fabric.strategies.XLAFSDPStrategy):
-        strategy.auto_wrap_policy = {diffusion.Diffusion}
+        # TODO: try sized based policy, or unwrap objects
+        from lightning.fabric.wrappers import _unwrap_objects
+        from functools import partial
+        from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
+
+        policy = partial(size_based_auto_wrap_policy, min_num_params=10000)
+        strategy.auto_wrap_policy = policy
     fabric = L.Fabric(
         accelerator=config.trainer.accelerator,
         devices=config.trainer.devices,

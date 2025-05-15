@@ -268,10 +268,16 @@ class Diffusion(L.LightningModule):
             self.ema.move_shadow_params_to_device(self.device)
         # Adapted from:
         # https://github.com/Dao-AILab/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py
-        distributed = (
-            self.trainer._accelerator_connector.use_distributed_sampler
-            and self.trainer._accelerator_connector.is_distributed
-        )
+        try:
+            distributed = (
+                self.trainer._accelerator_connector.use_distributed_sampler
+                and self.trainer._accelerator_connector.is_distributed
+            )
+        except:
+            distributed = (
+                isinstance(self.trainer.fabric.strategy, L.fabric.strategies.XLAFSDPStrategy)
+                or isinstance(self.trainer.fabric.strategy, L.fabric.strategies.XLAStrategy)
+            )
         # Determine if we're using the method externally or in the normal training flow
         if dataloaders is None:
             dataloaders = self.trainer.fit_loop._combined_loader.flattened
