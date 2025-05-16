@@ -283,7 +283,7 @@ def _train_manual(fabric: Fabric, config, logger, model, tokenizer):
             config_name='config')
 def main(config):
   NUM_TPU_CORES_PER_HOST = "auto"
-  NUM_HOSTS = 64
+  NUM_HOSTS = 2
   """Main entry point for training."""
   L.seed_everything(config.seed)
   _print_config(config, resolve=True, save_cfg=True)
