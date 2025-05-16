@@ -467,9 +467,18 @@ class Diffusion(nn.Module):
       self, x, xt, move_indices, p, block_size, sampling_eps_min, sampling_eps_max):
     """Resamples x_t if the percentage of masked tokens is outside the bounds
     defined by sampling_eps_min and sampling_eps_max."""
+    print(f"x.shape: {x.shape}") # torch.Size([16, 1024])
+    print(f"xt.shape: {xt.shape}") # torch.Size([16, 256, 4])
+    print(f"move_indices.shape: {move_indices.shape}") # torch.Size([16, 1024])
+    print(f"p.shape: {p.shape}") # torch.Size([16, 1024])
+    print(f"block_size: {block_size}") # 4
+    print(f"self.mask_index: {self.mask_index}") # 1024
     perc_masked = (xt == self.mask_index).float().sum(-1) / block_size
-    while (perc_masked < sampling_eps_min).any() or \
-      (perc_masked > sampling_eps_max).any():
+    print(f"Initial perc_masked: {perc_masked}")
+    while (perc_masked < sampling_eps_min).any() or (perc_masked > sampling_eps_max).any():
+      print(f"Current perc_masked: {perc_masked}")
+      print(f"Blocks below min: {(perc_masked < sampling_eps_min).sum()}")
+      print(f"Blocks above max: {(perc_masked > sampling_eps_max).sum()}")
       # if a bound is epsilon, don't resample
       if sampling_eps_min == 1e-3 and sampling_eps_max != 1:
         regen_idx = (perc_masked > sampling_eps_max)
@@ -482,17 +491,19 @@ class Diffusion(nn.Module):
       elif sampling_eps_min != 1e-3 and sampling_eps_max != 1:
         regen_idx = (perc_masked < sampling_eps_min) | (perc_masked > sampling_eps_max)
       print(f"_resample_q_xt 1")
+      print(f"Number of blocks to resample: {regen_idx.sum()}")
       regen_idx = regen_idx.repeat_interleave(block_size,dim=-1)
+      print(f"regen_idx: {regen_idx.shape}")
       print(f"_resample_q_xt 2")
       move_indices[regen_idx] = (torch.rand(
         * x.shape, device=xm.xla_device()) < p)[regen_idx]
       print(f"_resample_q_xt 3")
       xt = torch.where(move_indices, self.mask_index, x)
-      print(f"_resample_q_xt 4")  
+      print(f"_resample_q_xt 4")
       xt = xt.reshape(xt.shape[0], -1, block_size)
       print(f"_resample_q_xt 5")
       perc_masked = (xt == self.mask_index).float().sum(-1) / block_size
-      print(f"perc_masked: {perc_masked}")
+      print(f"Updated perc_masked: {perc_masked}")
       print(f"perc_masked.shape: {perc_masked.shape}")
     return xt
   
@@ -518,9 +529,13 @@ class Diffusion(nn.Module):
     if block_size == 1 and sampling_eps_min == 1.0:
       return torch.full_like(x, self.mask_index)
     print("here 1")
-    # no need to resample for bounds 1e-3, 1
+    print(f"self.config.training.resample: {self.config.training.resample}")
+    print(f"sampling_eps_min: {sampling_eps_min}")
+    print(f"sampling_eps_max: {sampling_eps_max}")
+    print(f"condition check: {not (sampling_eps_min == 1e-3 and sampling_eps_max == 1.0)}")
     if self.config.training.resample and \
       not (sampling_eps_min == 1e-3 and sampling_eps_max == 1.0):
+      print("running resample")
       xt = xt.reshape(xt.shape[0], -1, block_size)
       xt = self._resample_q_xt(x,
                                xt,

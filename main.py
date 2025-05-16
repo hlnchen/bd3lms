@@ -258,6 +258,7 @@ def _train_manual(fabric: Fabric, config, logger, model, tokenizer):
   # If you have config.training.num_epochs, you can use that.
   # For this example, we'll rely on max_steps.
   # num_epochs = getattr(config.training, "num_epochs", int(1e6)) # A large number if not specified
+  
   print(f"Start training loop")
   for epoch_idx in range(config.trainer.max_steps):
     fabric.print(f"Starting Epoch {epoch_idx} (Global step: {global_step})")
@@ -286,7 +287,6 @@ def main(config):
   """Main entry point for training."""
   L.seed_everything(config.seed)
   _print_config(config, resolve=True, save_cfg=True)
-  
   logger = utils.get_logger(__name__)
   tokenizer = dataloader.get_tokenizer(config)
   model = diffusion.Diffusion(config, tokenizer=tokenizer)
