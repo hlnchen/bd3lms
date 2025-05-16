@@ -19,6 +19,8 @@ import utils
 import numpy as np
 import itertools
 
+import torch_xla.core.xla_model as xm
+
 def _sample_categorical(categorical_probs):
   gumbel_norm = (1e-10 - (torch.rand_like(categorical_probs) + 1e-10).log())
   samples = (categorical_probs / gumbel_norm).argmax(dim=-1)
@@ -144,7 +146,7 @@ class Diffusion(nn.Module):
     if hasattr(self.backbone, "block_diff_mask") and self.config.model.attn_backend == 'sdpa':
       self.backbone.block_diff_mask = self.backbone.block_diff_mask.to(*args, **kwargs)
     elif hasattr(self.backbone, "block_diff_mask") and self.config.model.attn_backend == 'flex':
-      self.backbone.block_diff_mask = self.backbone.block_diff_mask.to(self.device)
+      self.backbone.block_diff_mask = self.backbone.block_diff_mask
     if hasattr(self, 'sampling_eps_min') and torch.is_tensor(self.sampling_eps_min):
       self.sampling_eps_min = self.sampling_eps_min.to(*args, **kwargs)
       self.sampling_eps_max = self.sampling_eps_max.to(*args, **kwargs)
@@ -479,12 +481,19 @@ class Diffusion(nn.Module):
           break
       elif sampling_eps_min != 1e-3 and sampling_eps_max != 1:
         regen_idx = (perc_masked < sampling_eps_min) | (perc_masked > sampling_eps_max)
+      print(f"_resample_q_xt 1")
       regen_idx = regen_idx.repeat_interleave(block_size,dim=-1)
+      print(f"_resample_q_xt 2")
       move_indices[regen_idx] = (torch.rand(
-        * x.shape, device=x.device) < p)[regen_idx]
+        * x.shape, device=xm.xla_device()) < p)[regen_idx]
+      print(f"_resample_q_xt 3")
       xt = torch.where(move_indices, self.mask_index, x)
+      print(f"_resample_q_xt 4")  
       xt = xt.reshape(xt.shape[0], -1, block_size)
+      print(f"_resample_q_xt 5")
       perc_masked = (xt == self.mask_index).float().sum(-1) / block_size
+      print(f"perc_masked: {perc_masked}")
+      print(f"perc_masked.shape: {perc_masked.shape}")
     return xt
   
   def q_xt(
@@ -501,14 +510,14 @@ class Diffusion(nn.Module):
     """
     if block_size is None:
       block_size = self.block_size
-  
-    move_indices = torch.rand(
-      * x.shape, device=x.device) <= p
+    print(f"x.shape: {x.shape}")
+    move_indices = torch.rand(*x.shape, device=xm.xla_device()) <= p
+    print(f"move_indices.shape: {move_indices.shape}")
     xt = torch.where(move_indices, self.mask_index, x)
-
+    print(f"xt.shape: {xt.shape}")
     if block_size == 1 and sampling_eps_min == 1.0:
       return torch.full_like(x, self.mask_index)
-
+    print("here 1")
     # no need to resample for bounds 1e-3, 1
     if self.config.training.resample and \
       not (sampling_eps_min == 1e-3 and sampling_eps_max == 1.0):
@@ -521,11 +530,12 @@ class Diffusion(nn.Module):
                                sampling_eps_min,
                                sampling_eps_max)
       xt = xt.reshape(xt.shape[0], -1)
+    print("here 2")
     return xt
 
   def _sample_prior(self, *batch_dims):
     return self.mask_index * torch.ones(
-      * batch_dims, dtype=torch.int64, device=self.device)
+      * batch_dims, dtype=torch.int64)
 
   @torch.no_grad()
   def _nucleus_sample(self, p_x0):
@@ -571,7 +581,7 @@ class Diffusion(nn.Module):
       num_masked = (x[:, -self.block_size:] == self.mask_index).sum(-1)
       ind = torch.randint(0, num_masked, (x_block.shape[0],))
       ind = (x[:, -self.block_size:] == self.mask_index).nonzero()[ind, 1]
-      mask = (torch.arange(self.block_size, device=x.device) == ind[:, None]).to(x_block.dtype)
+      mask = (torch.arange(self.block_size) == ind[:, None]).to(x_block.dtype)
       x_block = x_block * mask + x[:, -self.block_size:] * (1 - mask)
     else:
       q_xs = p_x0 * (1 - mask_prob)
@@ -601,16 +611,14 @@ class Diffusion(nn.Module):
       num_pred_tokens = self.num_tokens - 1
       x = torch.zeros(
         (bsz, num_pred_tokens + 1),
-        dtype=torch.long,
-        device=self.device)
+        dtype=torch.long)
       x[:, 0] = self.tokenizer.bos_token_id
       stop = False
       for i in tqdm(range(num_pred_tokens)):
         # need to sample a gumbel for each token
         # to save memory in variable-length sampling
         noise = (torch.distributions.Gumbel(0, 1)
-                .sample((bsz, self.vocab_size))
-                .to(self.device))
+                .sample((bsz, self.vocab_size)))
         next_logits = self.forward(
           x[:, :i + 1][:, -context_len:],
           None,
@@ -754,14 +762,14 @@ class Diffusion(nn.Module):
     return edge
 
   def _sample_t(
-      self, batch_dims, device, sampling_eps_min, sampling_eps_max, block_size=None):
-    print(f"check 1")
+      self, batch_dims, sampling_eps_min, sampling_eps_max, block_size=None):
+
     if block_size is None:
       block_size = self.block_size
     n = batch_dims[-1]
     num_blocks = n // block_size
     _eps_b = torch.rand((batch_dims[0], num_blocks))
-    print(f"check 2")
+
     # antithetic sampling along blocks & batches (for uniform sampling)
     if self.antithetic_sampling:
       offset_b = torch.arange(batch_dims[0] * num_blocks) / (batch_dims[0] * num_blocks)
@@ -770,7 +778,7 @@ class Diffusion(nn.Module):
     t = _eps_b
     if block_size != self.config.model.length:
       t = t.repeat_interleave(block_size, dim=-1)
-    print("check 3")
+
     # nll
     if sampling_eps_max >= 1 and sampling_eps_min >= 1:
       return torch.ones_like(t)
@@ -809,45 +817,48 @@ class Diffusion(nn.Module):
     if t is None:
       print(f"Start sample t")
       t = self._sample_t(x0.shape,
-                         x0.device,
                          sampling_eps_min,
                          sampling_eps_max)
-    print(f"t: {t}")
     loss_scale, p = self.noise(t)
+    print(f"noise computed")
     sigma = self._sigma_from_p(p[:,0].unsqueeze(-1))
     dsigma = - loss_scale * torch.expm1(sigma) # used for sedd
-
+    print("check 1")
     # below is needed to reproduce mdlm/sedd numbers with models from sahoo et al
     # (numerical imprecision computing probs under loglinear schedule)
     if self.mdlm_loss_scale:
       sigma, dsigma = self.noise.total_noise(t), self.noise.rate_noise(t)
       p = 1 - torch.exp(-sigma)
       loss_scale = - (dsigma / torch.expm1(sigma))
-
+    print("check 2")
     xt = self.q_xt(x0,
                    p,
                    sampling_eps_min=sampling_eps_min,
                    sampling_eps_max=sampling_eps_max)
+    print("check 3")
     if sampling_eps_min is not None and sampling_eps_min > 0.5:
       loss_scale = - torch.ones_like(loss_scale)
+    print("check 4")
     if self.ignore_bos:
       xt[:, 0] = x0[:, 0]
-    
+    print("check 5")
     x_input = xt
     if self.cross_attn:
       x_input = torch.cat((xt, x0), dim=-1)
-
+    print("check 6")
     model_output = self.forward(x_input, sigma=sigma)
+    print("check 7")
     utils.print_nans(model_output, 'model_output')
-
+    print("check 8")
     if self.parameterization == 'sedd':
       return dsigma * self._score_entropy(
         model_output, sigma, xt, x0)
-
+    print("check 9")
     log_p_theta = torch.gather(
       input=model_output,
       dim=-1,
       index=x0[:, :, None]).squeeze(-1)
+    print("check 10")
     loss = loss_scale * log_p_theta
     return loss
 
@@ -888,9 +899,9 @@ class Diffusion(nn.Module):
     # collect losses per batch across devices and sum them per interval
     best_var = float('inf')
     for (eps_min, eps_max), var in self.metrics.valid_vars.items():
-      all_vars = torch.tensor(0., device=self.device)
+      all_vars = torch.tensor(0.)
       for i in range(len(var)):
-        agg_var = var[i].to(self.device)
+        agg_var = var[i]
         agg_var = self.all_gather(agg_var)
         all_vars += agg_var.var()
       if all_vars < best_var:
@@ -937,7 +948,7 @@ class Diffusion(nn.Module):
         dim=-1) + score[:, self.mask_index + 1:].sum(dim=-1)
     const = q_ratio * (q_ratio.log() - 1)
 
-    entropy = torch.zeros(* xt.shape, device=xt.device)
+    entropy = torch.zeros(* xt.shape)
     entropy[masked_indices] += pos_term - neg_term + const
     return entropy
 
@@ -946,18 +957,17 @@ class Diffusion(nn.Module):
     self, n_samples, num_steps, seqlen, eps=1e-5): 
     x = self._sample_prior(
       n_samples,
-      seqlen).to(self.device)
+      seqlen)
     x[:, 0] = self.tokenizer.bos_token_id
     timesteps = torch.linspace(
-      1, eps, num_steps + 1, device=self.device)
+      1, eps, num_steps + 1)
     dt = (1 - eps) / num_steps
     for i in tqdm(range(num_steps), desc='step'):
       t = timesteps[i] * torch.ones(
-        x.shape[0], 1, device=self.device)
+        x.shape[0], 1)
       x = self._analytic_update(x=x, t=t, dt=dt)
     # denoising step 
-    t = timesteps[-1] * torch.ones(x.shape[0], 1,
-                                  device=self.device)
+    t = timesteps[-1] * torch.ones(x.shape[0], 1)
     x = self._denoiser_update(x=x, t=t)
     
     stop, x = self._check_stop_conds(x)
@@ -978,8 +988,7 @@ class Diffusion(nn.Module):
       num_strides = self.config.model.length // 512
       num_strides -= 1
 
-    ones = torch.ones((n_samples,1), dtype=self.dtype,
-                      device=self.device)
+    ones = torch.ones((n_samples,1), dtype=self.dtype)
     
     # reset kvs
     if self.config.sampling.kv_cache:
@@ -988,13 +997,13 @@ class Diffusion(nn.Module):
     for stride_num in tqdm(range(num_strides)):
       # sample next block
       if stride_num == 0:
-        x_accum = self._sample_prior(n_samples, self.block_size).to(self.device)
+        x_accum = self._sample_prior(n_samples, self.block_size)
         x_accum[:, 0] = self.tokenizer.bos_token_id
       else:
         if mdlm_semi_ar:
-          x = self._sample_prior(n_samples, 512).to(self.device)
+          x = self._sample_prior(n_samples, 512)
         else:
-          x = self._sample_prior(n_samples, self.block_size).to(self.device)
+          x = self._sample_prior(n_samples, self.block_size)
         x_accum = torch.cat((x_accum, x), dim=1)
 
       # compute logits in a sliding window (context passed to model can't exceed context_size)
@@ -1006,7 +1015,7 @@ class Diffusion(nn.Module):
 
       dt = 1 / num_steps
       p_x0_cache = None
-      timesteps = torch.linspace(1, 0, num_steps, device=self.device)
+      timesteps = torch.linspace(1, 0, num_steps)
       t = 1
       for i in range(num_steps):
         if self.mask_index not in x_accum:
